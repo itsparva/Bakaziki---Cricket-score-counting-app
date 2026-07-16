@@ -31,6 +31,11 @@ mongoose.connect(process.env.MONGO_URI)
 
 // --- API ROUTES ---
 
+// Basic health check route
+app.get('/', (req, res) => {
+  res.send('🏏 GullyScorer Backend is Live and Running!');
+});
+
 // 1. Create a New Match (Triggered when "Let's Play" is clicked)
 app.post('/api/match', async (req, res) => {
   try {
