@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import PostMatchSummary from './PostMatchSummary';
 
 // Point this to your Node server
-const SERVER_URL = 'http://localhost:5000'; 
+const SERVER_URL = 'https://bakaziki-cricket-score-counting-app.onrender.com'; 
 
 export default function SpectatorView({ matchId, onBack }) {
   const [matchData, setMatchData] = useState(null);
