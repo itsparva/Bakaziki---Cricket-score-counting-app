@@ -11,8 +11,13 @@ const server = http.createServer(app);
 
 // CORS setup for Vercel & Local testing
 const corsOptions = {
-  origin: '*', // Allows your Vercel app to connect
-  methods: ['GET', 'POST', 'PUT'],
+  // The VIP Guest List:
+  origin: [
+    'http://localhost:5173', 
+    'http://127.0.0.1:5173',
+    'https://bakaziki-cricket-score-counting-app.vercel.app' // Your live app!
+  ],
+  methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
   credentials: true,
 };
 
