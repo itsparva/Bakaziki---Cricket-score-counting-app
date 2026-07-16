@@ -10,15 +10,11 @@ const app = express();
 const server = http.createServer(app);
 
 // CORS setup for Vercel & Local testing
+// --- EXPRESS CORS ---
 const corsOptions = {
-  // The VIP Guest List:
-  origin: [
-    'http://localhost:5173', 
-    'http://127.0.0.1:5173',
-    'https://bakaziki-cricket-score-counting-app.vercel.app' // Your live app!
-  ],
-  methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-  credentials: true,
+  origin: '*', // Wide open to the internet
+  methods: ['GET', 'POST', 'PUT', 'OPTIONS']
+  // ❌ REMOVED credentials: true
 };
 
 app.use(cors(corsOptions));
@@ -27,14 +23,9 @@ app.use(express.json());
 // --- SOCKET.IO INITIALIZATION ---
 const io = require('socket.io')(server, {
   cors: {
-    // Give Socket.io the exact same VIP list!
-    origin: [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'https://bakaziki-cricket-score-counting-app.vercel.app'
-    ],
-    methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
-    credentials: true
+    origin: '*', // Wide open to the internet
+    methods: ['GET', 'POST', 'PUT', 'OPTIONS']
+    // ❌ REMOVED credentials: true
   }
 });
 
