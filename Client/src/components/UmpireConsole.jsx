@@ -176,7 +176,7 @@ export default function UmpireConsole({ matchData }) {
         finalResult: matchComplete ? { t1: firstInningsStats, t2: { team: matchData[battingTeam], runs, wickets, stats }, resultMessage: "Match Over" } : null
       };
 
-      axios.put(`https://gullyscorer-api.onrender.com/api/match/${matchData.matchId}`, payload)
+      axios.put(`https://bakaziki-cricket-score-counting-app.onrender.com/api/match/${matchData.matchId}`, payload)
         .catch(err => console.error("Failed to sync score", err));
     }
   }, [runs, wickets, balls, currentOverHistory, striker, nonStriker, bowler, matchComplete]);

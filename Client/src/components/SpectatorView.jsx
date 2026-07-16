@@ -3,7 +3,7 @@ import axios from 'axios';
 import { io } from 'socket.io-client';
 import PostMatchSummary from './PostMatchSummary';
 
-const SERVER_URL = 'https://gullyscorer-api.onrender.com';
+const SERVER_URL = 'https://bakaziki-cricket-score-counting-app.onrender.com';
 
 export default function SpectatorView({ matchId, onBack }) {
   const [matchData, setMatchData] = useState(null);
