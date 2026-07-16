@@ -4,44 +4,39 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-const Match = require('./models/Match');
+
+// Make sure this matches your exact folder/file spelling!
+const Match = require('./models/Match'); 
 
 const app = express();
 const server = http.createServer(app);
 
-// CORS setup for Vercel & Local testing
-// --- EXPRESS CORS ---
-const corsOptions = {
-  origin: '*', // Wide open to the internet
-  methods: ['GET', 'POST', 'PUT', 'OPTIONS']
-  // ❌ REMOVED credentials: true
-};
-
-app.use(cors(corsOptions));
+// ==========================================
+// 1. BULLETPROOF CORS (Wide Open)
+// ==========================================
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// --- SOCKET.IO INITIALIZATION ---
-const io = require('socket.io')(server, {
-  cors: {
-    origin: '*', // Wide open to the internet
-    methods: ['GET', 'POST', 'PUT', 'OPTIONS']
-    // ❌ REMOVED credentials: true
-  }
+const io = new Server(server, {
+  cors: { origin: '*' }
 });
 
-// Database Connection
+// ==========================================
+// 2. DATABASE CONNECTION
+// ==========================================
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('🔥 MongoDB Connected successfully'))
   .catch((err) => console.log('❌ MongoDB Connection Error:', err));
 
-// --- API ROUTES ---
-
-// Basic health check route
+// ==========================================
+// 3. API ROUTES
+// ==========================================
+// Health check
 app.get('/', (req, res) => {
   res.send('🏏 GullyScorer Backend is Live and Running!');
 });
 
-// 1. Create a New Match (Triggered when "Let's Play" is clicked)
+// Create Match
 app.post('/api/match', async (req, res) => {
   try {
     const { matchId, setupData } = req.body;
@@ -53,7 +48,7 @@ app.post('/api/match', async (req, res) => {
   }
 });
 
-// 2. Fetch Live Match Data (For Spectators)
+// Fetch Match
 app.get('/api/match/:matchId', async (req, res) => {
   try {
     const match = await Match.findOne({ matchId: req.params.matchId.toUpperCase() });
@@ -64,7 +59,7 @@ app.get('/api/match/:matchId', async (req, res) => {
   }
 });
 
-// 3. Update Live Match State (Triggered by the Umpire on EVERY ball)
+// Update Match
 app.put('/api/match/:matchId', async (req, res) => {
   try {
     const { liveState, stats, isComplete, finalResult } = req.body;
@@ -77,7 +72,7 @@ app.put('/api/match/:matchId', async (req, res) => {
 
     if (!updatedMatch) return res.status(404).json({ error: 'Match not found' });
 
-    // 🔥 THE MAGIC: Broadcast the update instantly to anyone watching this specific match ID
+    // Broadcast the update via WebSockets
     io.to(req.params.matchId).emit('matchUpdate', updatedMatch);
 
     res.status(200).json({ message: 'Match updated successfully' });
@@ -86,22 +81,19 @@ app.put('/api/match/:matchId', async (req, res) => {
   }
 });
 
-// --- SOCKET.IO CONNECTIONS ---
+// ==========================================
+// 4. SOCKET.IO ROOMS
+// ==========================================
 io.on('connection', (socket) => {
-  console.log(`📡 Spectator connected: ${socket.id}`);
-
-  // When a spectator enters a Match ID, they "join" that specific room
   socket.on('joinMatch', (matchId) => {
     socket.join(matchId);
-    console.log(`User joined match room: ${matchId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`Spectator disconnected: ${socket.id}`);
   });
 });
 
-// Start Server
+// ==========================================
+// 5. START SERVER
+// ==========================================
+// CRITICAL: This must be server.listen, not app.listen!
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
