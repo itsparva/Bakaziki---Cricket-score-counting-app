@@ -1,24 +1,37 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-
-// Make sure this matches your exact folder/file spelling!
-const Match = require('./models/Match'); 
+const Match = require('./models/Match');
 
 const app = express();
 const server = http.createServer(app);
 
 // ==========================================
-// 1. BULLETPROOF CORS (Wide Open)
+// 1. BRUTE FORCE CORS (The Sledgehammer)
 // ==========================================
-app.use(cors({ origin: '*' }));
+// We are manually injecting the exact headers the browser is begging for.
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Intercept pre-flight OPTIONS requests and approve them immediately
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(express.json());
 
+// Socket.io also gets the wide-open treatment
 const io = new Server(server, {
-  cors: { origin: '*' }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "OPTIONS"]
+  }
 });
 
 // ==========================================
@@ -31,12 +44,10 @@ mongoose.connect(process.env.MONGO_URI)
 // ==========================================
 // 3. API ROUTES
 // ==========================================
-// Health check
 app.get('/', (req, res) => {
   res.send('🏏 GullyScorer Backend is Live and Running!');
 });
 
-// Create Match
 app.post('/api/match', async (req, res) => {
   try {
     const { matchId, setupData } = req.body;
@@ -48,7 +59,6 @@ app.post('/api/match', async (req, res) => {
   }
 });
 
-// Fetch Match
 app.get('/api/match/:matchId', async (req, res) => {
   try {
     const match = await Match.findOne({ matchId: req.params.matchId.toUpperCase() });
@@ -59,7 +69,6 @@ app.get('/api/match/:matchId', async (req, res) => {
   }
 });
 
-// Update Match
 app.put('/api/match/:matchId', async (req, res) => {
   try {
     const { liveState, stats, isComplete, finalResult } = req.body;
@@ -72,9 +81,7 @@ app.put('/api/match/:matchId', async (req, res) => {
 
     if (!updatedMatch) return res.status(404).json({ error: 'Match not found' });
 
-    // Broadcast the update via WebSockets
     io.to(req.params.matchId).emit('matchUpdate', updatedMatch);
-
     res.status(200).json({ message: 'Match updated successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update match' });
@@ -91,9 +98,8 @@ io.on('connection', (socket) => {
 });
 
 // ==========================================
-// 5. START SERVER
+// 5. START SERVER (Crucial: server.listen)
 // ==========================================
-// CRITICAL: This must be server.listen, not app.listen!
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
