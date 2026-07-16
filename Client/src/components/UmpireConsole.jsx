@@ -165,9 +165,10 @@ export default function UmpireConsole({ matchData }) {
     if (innings === 2 && runs === 0 && balls === 0) setStats(getInitialStats());
   }, [innings]);
 
-  // --- SYNC WITH BACKEND (UPDATED PAYLOAD) ---
+ // --- SYNC WITH BACKEND (UPDATED PAYLOAD) ---
   useEffect(() => {
-    if (balls > 0 || wickets > 0 || matchComplete) {
+    // FIX: Now it also syncs the moment both strikers are selected!
+    if (balls > 0 || wickets > 0 || matchComplete || (striker && nonStriker)) {
       const payload = {
         liveState: { innings, battingTeam: matchData[battingTeam], firstInningsStats, runs, wickets, balls, currentOverHistory, pastOvers, striker, nonStriker, bowler, fallOfWickets },
         stats: stats,

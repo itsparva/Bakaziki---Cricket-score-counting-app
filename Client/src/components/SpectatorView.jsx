@@ -26,9 +26,18 @@ export default function SpectatorView({ matchId, onBack }) {
     };
     fetchMatch();
 
-    const socket = io(SERVER_URL);
+    // 2. Connect to WebSockets (FIX: Force WebSockets to bypass Polling CORS errors)
+    const socket = io(SERVER_URL, {
+      transports: ['websocket'],
+      upgrade: false
+    });
+    
     socket.emit('joinMatch', matchId);
-    socket.on('matchUpdate', (updatedData) => setMatchData(updatedData));
+
+    socket.on('matchUpdate', (updatedData) => {
+      setMatchData(updatedData);
+    });
+
     return () => socket.disconnect();
   }, [matchId]);
 
