@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import PostMatchSummary from './PostMatchSummary';
 import axios from 'axios';
+import PostMatchSummary from './PostMatchSummary';
 
 export default function UmpireConsole({ matchData }) {
   const [innings, setInnings] = useState(1);
@@ -12,7 +12,7 @@ export default function UmpireConsole({ matchData }) {
 
   const battingTeamKey = battingTeam === 'teamA' ? 'playersA' : 'playersB';
   const bowlingTeamKey = battingTeam === 'teamA' ? 'playersB' : 'playersA';
-  const fieldingTeamList = matchData[bowlingTeamKey]; // Used for selecting fielders
+  const fieldingTeamList = matchData[bowlingTeamKey];
   const targetOvers = parseInt(matchData.overs);
   const totalWickets = matchData[battingTeamKey].length;
 
@@ -21,13 +21,14 @@ export default function UmpireConsole({ matchData }) {
   const [balls, setBalls] = useState(0);
   const [currentOverHistory, setCurrentOverHistory] = useState([]);
   const [pastOvers, setPastOvers] = useState([]);
+  
+  // NEW: Fall of Wickets Tracking
+  const [fallOfWickets, setFallOfWickets] = useState([]);
 
   const [striker, setStriker] = useState(null);
   const [nonStriker, setNonStriker] = useState(null);
   const [bowler, setBowler] = useState(null);
   const [historyStack, setHistoryStack] = useState([]); 
-
-  // --- NEW: Wicket Modal State ---
   const [wicketModal, setWicketModal] = useState({ isOpen: false, type: '', fielder: '' });
 
   const getInitialStats = () => {
@@ -50,7 +51,7 @@ export default function UmpireConsole({ matchData }) {
   const saveSnapshot = () => {
     setHistoryStack(prev => [...prev, JSON.parse(JSON.stringify({
       runs, wickets, balls, currentOverHistory, pastOvers,
-      striker, nonStriker, bowler, stats
+      striker, nonStriker, bowler, stats, fallOfWickets
     }))]);
   };
 
@@ -60,7 +61,7 @@ export default function UmpireConsole({ matchData }) {
     setRuns(lastState.runs); setWickets(lastState.wickets); setBalls(lastState.balls);
     setCurrentOverHistory(lastState.currentOverHistory); setPastOvers(lastState.pastOvers);
     setStriker(lastState.striker); setNonStriker(lastState.nonStriker); setBowler(lastState.bowler);
-    setStats(lastState.stats);
+    setStats(lastState.stats); setFallOfWickets(lastState.fallOfWickets);
     setHistoryStack(prev => prev.slice(0, -1));
   };
 
@@ -97,14 +98,17 @@ export default function UmpireConsole({ matchData }) {
     setStats(newStats);
   };
 
-  // Trigger Modal instead of immediate Wicket
   const triggerWicketModal = () => {
     setWicketModal({ isOpen: true, type: '', fielder: '' });
   };
 
-  // Process the Wicket after Modal confirmation
   const confirmWicket = () => {
     saveSnapshot();
+    
+    // Record Fall of Wicket
+    const overString = `${Math.floor(balls / 6)}.${balls % 6}`;
+    setFallOfWickets(prev => [...prev, { score: runs, wicket: wickets + 1, over: overString, player: striker }]);
+
     setWickets(prev => prev + 1);
     setBalls(prev => prev + 1);
     setCurrentOverHistory(prev => [...prev, 'W']);
@@ -113,10 +117,8 @@ export default function UmpireConsole({ matchData }) {
     newStats.batting[striker].out = true;
     newStats.batting[striker].balls += 1;
 
-    // 1. Build the Dismissal String
     let dismissalStr = '';
     const { type, fielder } = wicketModal;
-    
     if (type === 'Bowled') dismissalStr = `b ${bowler}`;
     else if (type === 'LBW') dismissalStr = `lbw b ${bowler}`;
     else if (type === 'Caught') dismissalStr = `c ${fielder} b ${bowler}`;
@@ -126,10 +128,7 @@ export default function UmpireConsole({ matchData }) {
 
     newStats.batting[striker].dismissal = dismissalStr;
 
-    // 2. Add Wicket to Bowler Stats (Only if NOT a Run Out)
-    if (type !== 'Run Out') {
-      newStats.bowling[bowler].wickets += 1;
-    }
+    if (type !== 'Run Out') newStats.bowling[bowler].wickets += 1;
     newStats.bowling[bowler].balls += 1;
     
     setStats(newStats);
@@ -138,7 +137,7 @@ export default function UmpireConsole({ matchData }) {
       setStriker(nonStriker);
       setNonStriker(null);
     }
-    setWicketModal({ isOpen: false, type: '', fielder: '' }); // Close Modal
+    setWicketModal({ isOpen: false, type: '', fielder: '' });
   };
 
   const handleStartNextOver = () => {
@@ -151,11 +150,11 @@ export default function UmpireConsole({ matchData }) {
 
   const handleInningsTransition = () => {
     if (innings === 1) {
-      setFirstInningsStats({ team: matchData[battingTeam], runs, wickets, target: runs + 1, stats });
+      setFirstInningsStats({ team: matchData[battingTeam], runs, wickets, target: runs + 1, stats, fallOfWickets });
       setInnings(2);
       setBattingTeam(battingTeam === 'teamA' ? 'teamB' : 'teamA');
       setRuns(0); setWickets(0); setBalls(0);
-      setCurrentOverHistory([]); setPastOvers([]); setHistoryStack([]);
+      setCurrentOverHistory([]); setPastOvers([]); setHistoryStack([]); setFallOfWickets([]);
       setStriker(null); setNonStriker(null); setBowler(null);
     } else {
       setMatchComplete(true);
@@ -166,18 +165,17 @@ export default function UmpireConsole({ matchData }) {
     if (innings === 2 && runs === 0 && balls === 0) setStats(getInitialStats());
   }, [innings]);
 
-  // --- SYNC WITH BACKEND ---
+  // --- SYNC WITH BACKEND (UPDATED PAYLOAD) ---
   useEffect(() => {
-    // We only want to sync if the match has actually started (balls > 0 or a wicket has fallen)
     if (balls > 0 || wickets > 0 || matchComplete) {
       const payload = {
-        liveState: { runs, wickets, balls, currentOverHistory, pastOvers, striker, nonStriker, bowler },
+        liveState: { innings, battingTeam: matchData[battingTeam], firstInningsStats, runs, wickets, balls, currentOverHistory, pastOvers, striker, nonStriker, bowler, fallOfWickets },
         stats: stats,
         isComplete: matchComplete,
         finalResult: matchComplete ? { t1: firstInningsStats, t2: { team: matchData[battingTeam], runs, wickets, stats }, resultMessage: "Match Over" } : null
       };
 
-      axios.put(`http://localhost:5000/api/match/${matchData.matchId}`, payload)
+      axios.put(`https://gullyscorer-api.onrender.com/api/match/${matchData.matchId}`, payload)
         .catch(err => console.error("Failed to sync score", err));
     }
   }, [runs, wickets, balls, currentOverHistory, striker, nonStriker, bowler, matchComplete]);
@@ -187,7 +185,6 @@ export default function UmpireConsole({ matchData }) {
     const t2Name = matchData[battingTeam];
     const isWin = runs >= firstInningsStats.target;
     const totalWicketsAvailable = matchData[battingTeam === 'teamA' ? 'playersA' : 'playersB'].length;
-    
     let resultMsg = "Match Tied!";
     if (isWin) resultMsg = `${t2Name} Won by ${totalWicketsAvailable - wickets} wickets!`;
     else if (firstInningsStats.runs > runs) resultMsg = `${firstInningsStats.team} Won by ${firstInningsStats.runs - runs} runs!`;
@@ -245,52 +242,35 @@ export default function UmpireConsole({ matchData }) {
   return (
     <div className="flex flex-col h-full bg-slate-950 text-white select-none relative">
       
-      {/* --- WICKET MODAL OVERLAY --- */}
+      {/* WICKET MODAL */}
       {wicketModal.isOpen && (
         <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl">
             <h3 className="text-xl font-black text-red-500 uppercase mb-4 text-center">How was {striker} out?</h3>
-            
-            {/* Dismissal Type Selection */}
             <div className="grid grid-cols-2 gap-2 mb-4">
               {['Bowled', 'Caught', 'LBW', 'Run Out', 'Stumped'].map(type => (
-                <button key={type} onClick={() => setWicketModal({...wicketModal, type, fielder: ''})} 
-                  className={`py-3 rounded-lg font-bold border transition-colors ${wicketModal.type === type ? 'bg-red-500 text-white border-red-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                  {type}
-                </button>
+                <button key={type} onClick={() => setWicketModal({...wicketModal, type, fielder: ''})} className={`py-3 rounded-lg font-bold border transition-colors ${wicketModal.type === type ? 'bg-red-500 text-white border-red-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{type}</button>
               ))}
             </div>
-
-            {/* Fielder Selection (Appears only if Caught, Run Out, or Stumped) */}
             {['Caught', 'Run Out', 'Stumped'].includes(wicketModal.type) && (
               <div className="mb-6">
                 <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-2">Select Fielder</p>
                 <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                   {fieldingTeamList.map(fielder => (
-                    <button key={fielder} onClick={() => setWicketModal({...wicketModal, fielder})}
-                      className={`py-2 px-2 text-sm rounded-lg font-bold border transition-colors ${wicketModal.fielder === fielder ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                      {fielder}
-                    </button>
+                    <button key={fielder} onClick={() => setWicketModal({...wicketModal, fielder})} className={`py-2 px-2 text-sm rounded-lg font-bold border transition-colors ${wicketModal.fielder === fielder ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{fielder}</button>
                   ))}
                 </div>
               </div>
             )}
-
             <div className="flex gap-3 mt-4">
               <button onClick={() => setWicketModal({isOpen: false, type: '', fielder: ''})} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold">Cancel</button>
-              <button 
-                onClick={confirmWicket} 
-                disabled={!wicketModal.type || (['Caught', 'Run Out', 'Stumped'].includes(wicketModal.type) && !wicketModal.fielder)}
-                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-black uppercase disabled:opacity-50 disabled:bg-slate-700"
-              >
-                Confirm Out
-              </button>
+              <button onClick={confirmWicket} disabled={!wicketModal.type || (['Caught', 'Run Out', 'Stumped'].includes(wicketModal.type) && !wicketModal.fielder)} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-black uppercase disabled:opacity-50 disabled:bg-slate-700">Confirm Out</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 1. Header & Live Scoreboard */}
+      {/* Header & Scoreboard */}
       <div className="bg-slate-900 pt-5 pb-3 px-4 border-b border-slate-800 shadow-xl z-10 shrink-0">
         <div className="flex justify-between items-center mb-2">
           <span className="text-xs font-bold text-red-500 animate-pulse uppercase tracking-widest px-2 py-1 bg-red-500/10 rounded-lg">Inn {innings}</span>
@@ -331,7 +311,7 @@ export default function UmpireConsole({ matchData }) {
         </div>
       </div>
 
-      {/* 2. Action Pad Area */}
+      {/* Action Pad */}
       <div className="flex-1 overflow-y-auto bg-slate-900 p-4 flex flex-col">
         <div className="bg-slate-950 py-3 px-4 border border-slate-800 rounded-xl flex items-center overflow-x-auto shrink-0 mb-4">
           <span className="text-xs text-slate-500 font-bold uppercase mr-3">Over:</span>
@@ -356,9 +336,7 @@ export default function UmpireConsole({ matchData }) {
               <button onClick={() => handleExtra('WD')} className="bg-amber-500/20 text-amber-500 border border-amber-500/30 py-3 rounded-2xl font-bold active:scale-95">Wide (WD)</button>
               <button onClick={() => handleExtra('NB')} className="bg-amber-500/20 text-amber-500 border border-amber-500/30 py-3 rounded-2xl font-bold active:scale-95">No Ball (NB)</button>
             </div>
-            <button onClick={triggerWicketModal} className="w-full bg-red-500 hover:bg-red-600 active:scale-95 text-white font-black text-xl py-4 rounded-2xl shadow-lg uppercase tracking-widest">
-              OUT! (Wicket)
-            </button>
+            <button onClick={triggerWicketModal} className="w-full bg-red-500 hover:bg-red-600 active:scale-95 text-white font-black text-xl py-4 rounded-2xl shadow-lg uppercase tracking-widest">OUT! (Wicket)</button>
           </div>
         ) : (
           <div className="mb-6 p-4 bg-emerald-900/30 border border-emerald-500/50 rounded-2xl text-center">
