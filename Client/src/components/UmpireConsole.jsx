@@ -21,15 +21,16 @@ export default function UmpireConsole({ matchData }) {
   const [balls, setBalls] = useState(0);
   const [currentOverHistory, setCurrentOverHistory] = useState([]);
   const [pastOvers, setPastOvers] = useState([]);
-  
-  // NEW: Fall of Wickets Tracking
   const [fallOfWickets, setFallOfWickets] = useState([]);
 
   const [striker, setStriker] = useState(null);
   const [nonStriker, setNonStriker] = useState(null);
   const [bowler, setBowler] = useState(null);
   const [historyStack, setHistoryStack] = useState([]); 
+  
+  // Modals
   const [wicketModal, setWicketModal] = useState({ isOpen: false, type: '', fielder: '' });
+  const [extraModal, setExtraModal] = useState({ isOpen: false, type: 'WD', runs: 0 });
 
   const getInitialStats = () => {
     const s = { batting: {}, bowling: {} };
@@ -45,7 +46,8 @@ export default function UmpireConsole({ matchData }) {
   const targetReached = innings === 2 && firstInningsStats && runs >= firstInningsStats.target;
   const isInningsComplete = isAllOut || isOversFinished || targetReached;
 
-  const validBallsInCurrentOver = currentOverHistory.filter(b => b !== 'WD' && b !== 'NB').length;
+  // FIX: Make sure any ball that is not a WD or NB is counted as a valid delivery.
+  const validBallsInCurrentOver = currentOverHistory.filter(b => !b.includes('WD') && !b.includes('NB')).length;
   const isOverComplete = validBallsInCurrentOver >= 6;
 
   const saveSnapshot = () => {
@@ -77,7 +79,9 @@ export default function UmpireConsole({ matchData }) {
     setBalls(prev => prev + 1);
     setCurrentOverHistory(prev => [...prev, runValue.toString()]);
 
-    const newStats = { ...stats };
+    // FIX: Deep clone stats so history stack isn't corrupted
+    const newStats = JSON.parse(JSON.stringify(stats));
+    
     newStats.batting[striker].runs += runValue;
     newStats.batting[striker].balls += 1;
     if (runValue === 4) newStats.batting[striker].fours += 1;
@@ -89,23 +93,52 @@ export default function UmpireConsole({ matchData }) {
     if (runValue % 2 !== 0) rotateStrike(striker, nonStriker);
   };
 
-  const handleExtra = (type) => {
+  // --- NEW EXTRAS LOGIC ---
+  const confirmExtra = () => {
     saveSnapshot();
-    setRuns(prev => prev + 1);
-    setCurrentOverHistory(prev => [...prev, type]);
-    const newStats = { ...stats };
-    newStats.bowling[bowler].runs += 1;
+    const newStats = JSON.parse(JSON.stringify(stats));
+    const { type, runs: extraRuns } = extraModal;
+    
+    let totalRunsAdded = 0;
+    let isLegalDelivery = false;
+    let ballLabel = '';
+
+    if (type === 'WD') {
+      // Wides: 1 run + any ran runs. All charged to bowler. 0 Balls faced/bowled.
+      totalRunsAdded = 1 + extraRuns;
+      newStats.bowling[bowler].runs += totalRunsAdded;
+      ballLabel = extraRuns > 0 ? `${totalRunsAdded}WD` : 'WD';
+    } 
+    else if (type === 'NB') {
+      // No Ball: 1 run penalty + ran runs. Ran runs go to batsman. 1 Ball faced, 0 Balls bowled.
+      totalRunsAdded = 1 + extraRuns;
+      newStats.bowling[bowler].runs += totalRunsAdded;
+      newStats.batting[striker].runs += extraRuns;
+      newStats.batting[striker].balls += 1;
+      ballLabel = extraRuns > 0 ? `${totalRunsAdded}NB` : 'NB';
+    } 
+    else if (type === 'B' || type === 'LB') {
+      // Byes / Leg Byes: Only ran runs. Not charged to bowler. 1 Legal delivery.
+      totalRunsAdded = extraRuns;
+      newStats.batting[striker].balls += 1;
+      newStats.bowling[bowler].balls += 1;
+      isLegalDelivery = true;
+      ballLabel = extraRuns > 0 ? `${extraRuns}${type}` : '0'; 
+    }
+
+    setRuns(prev => prev + totalRunsAdded);
+    if (isLegalDelivery) setBalls(prev => prev + 1);
+    setCurrentOverHistory(prev => [...prev, ballLabel]);
     setStats(newStats);
+
+    if (extraRuns % 2 !== 0) rotateStrike(striker, nonStriker);
+    setExtraModal({ isOpen: false, type: 'WD', runs: 0 });
   };
 
-  const triggerWicketModal = () => {
-    setWicketModal({ isOpen: true, type: '', fielder: '' });
-  };
+  const triggerWicketModal = () => setWicketModal({ isOpen: true, type: '', fielder: '' });
 
   const confirmWicket = () => {
     saveSnapshot();
-    
-    // Record Fall of Wicket
     const overString = `${Math.floor(balls / 6)}.${balls % 6}`;
     setFallOfWickets(prev => [...prev, { score: runs, wicket: wickets + 1, over: overString, player: striker }]);
 
@@ -113,7 +146,8 @@ export default function UmpireConsole({ matchData }) {
     setBalls(prev => prev + 1);
     setCurrentOverHistory(prev => [...prev, 'W']);
 
-    const newStats = { ...stats };
+    // Deep clone to protect history
+    const newStats = JSON.parse(JSON.stringify(stats));
     newStats.batting[striker].out = true;
     newStats.batting[striker].balls += 1;
 
@@ -165,9 +199,7 @@ export default function UmpireConsole({ matchData }) {
     if (innings === 2 && runs === 0 && balls === 0) setStats(getInitialStats());
   }, [innings]);
 
- // --- SYNC WITH BACKEND (UPDATED PAYLOAD) ---
   useEffect(() => {
-    // FIX: Now it also syncs the moment both strikers are selected!
     if (balls > 0 || wickets > 0 || matchComplete || (striker && nonStriker)) {
       const payload = {
         liveState: { innings, battingTeam: matchData[battingTeam], firstInningsStats, runs, wickets, balls, currentOverHistory, pastOvers, striker, nonStriker, bowler, fallOfWickets },
@@ -243,6 +275,32 @@ export default function UmpireConsole({ matchData }) {
   return (
     <div className="flex flex-col h-full bg-slate-950 text-white select-none relative">
       
+      {/* EXTRAS MODAL */}
+      {extraModal.isOpen && (
+        <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl">
+            <h3 className="text-xl font-black text-amber-500 uppercase mb-4 text-center">Add Extras</h3>
+            <div className="grid grid-cols-2 gap-2 mb-6">
+              {[{lbl: 'Wide', val: 'WD'}, {lbl: 'No Ball', val: 'NB'}, {lbl: 'Byes', val: 'B'}, {lbl: 'Leg Byes', val: 'LB'}].map(t => (
+                <button key={t.val} onClick={() => setExtraModal({...extraModal, type: t.val})} className={`py-3 rounded-lg font-bold border transition-colors ${extraModal.type === t.val ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{t.lbl}</button>
+              ))}
+            </div>
+            
+            <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-2">Runs Scored (Bat or Running)</p>
+            <div className="grid grid-cols-6 gap-2 mb-6">
+              {[0, 1, 2, 3, 4, 6].map(r => (
+                <button key={r} onClick={() => setExtraModal({...extraModal, runs: r})} className={`py-3 rounded-lg font-bold border transition-colors ${extraModal.runs === r ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{r}</button>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setExtraModal({isOpen: false, type: 'WD', runs: 0})} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold">Cancel</button>
+              <button onClick={confirmExtra} className="flex-1 py-3 rounded-xl bg-amber-500 text-slate-950 font-black uppercase">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WICKET MODAL */}
       {wicketModal.isOpen && (
         <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
@@ -318,7 +376,7 @@ export default function UmpireConsole({ matchData }) {
           <span className="text-xs text-slate-500 font-bold uppercase mr-3">Over:</span>
           <div className="flex gap-2">
             {currentOverHistory.map((ball, i) => (
-              <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md ${ball === 'W' ? 'bg-red-500 text-white' : ball === '4' || ball === '6' ? 'bg-emerald-500 text-slate-950' : ball === 'WD' || ball === 'NB' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>{ball}</div>
+              <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md ${ball === 'W' ? 'bg-red-500 text-white' : ball === '4' || ball === '6' ? 'bg-emerald-500 text-slate-950' : ball.includes('WD') || ball.includes('NB') ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>{ball}</div>
             ))}
           </div>
         </div>
@@ -333,9 +391,8 @@ export default function UmpireConsole({ matchData }) {
             <div className="grid grid-cols-3 gap-3 mb-4">
               {[0, 1, 2, 3, 4, 6].map((run) => <button key={run} onClick={() => handleRun(run)} className={`py-4 rounded-2xl text-2xl font-black shadow-sm active:scale-95 transition-transform ${run === 4 || run === 6 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-white'}`}>{run}</button>)}
             </div>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <button onClick={() => handleExtra('WD')} className="bg-amber-500/20 text-amber-500 border border-amber-500/30 py-3 rounded-2xl font-bold active:scale-95">Wide (WD)</button>
-              <button onClick={() => handleExtra('NB')} className="bg-amber-500/20 text-amber-500 border border-amber-500/30 py-3 rounded-2xl font-bold active:scale-95">No Ball (NB)</button>
+            <div className="mb-4">
+              <button onClick={() => setExtraModal({ isOpen: true, type: 'WD', runs: 0 })} className="w-full bg-amber-500/20 text-amber-500 border border-amber-500/30 py-4 rounded-2xl font-bold active:scale-95 uppercase tracking-widest shadow-sm">Add Extras (WD, NB, Byes)</button>
             </div>
             <button onClick={triggerWicketModal} className="w-full bg-red-500 hover:bg-red-600 active:scale-95 text-white font-black text-xl py-4 rounded-2xl shadow-lg uppercase tracking-widest">OUT! (Wicket)</button>
           </div>
@@ -362,7 +419,7 @@ export default function UmpireConsole({ matchData }) {
                       let btnStyle = 'bg-slate-800 text-slate-300';
                       if (ball === 'W') btnStyle = 'bg-red-500/20 text-red-400 border border-red-500/30';
                       if (ball === '4' || ball === '6') btnStyle = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
-                      if (ball === 'WD' || ball === 'NB') btnStyle = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+                      if (ball.includes('WD') || ball.includes('NB')) btnStyle = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
                       return <span key={i} className={`text-xs font-bold px-2 py-1 rounded shadow-sm ${btnStyle}`}>{ball}</span>;
                     })}
                   </div>

@@ -16,7 +16,7 @@ export default function HomeDashboard({ onStartMatch }) {
       {/* Top Welcome Header */}
       <div className="text-center mt-6">
         <h1 className="text-3xl font-black tracking-wider text-amber-500 uppercase">
-          GullyScorer
+          Bakaziki
         </h1>
         <p className="text-xs text-slate-400 mt-1 tracking-wide">
           Local Cricket • Real-Time Stats
@@ -62,14 +62,14 @@ export default function HomeDashboard({ onStartMatch }) {
             🏏 Start New Match
           </button>
           <p className="text-xs text-slate-500 mt-2">
-            Setup teams, customize overs, and start scoring instantly.
+            Setup teams, customize overs, and start Bakaziking instantly.
           </p>
         </div>
       </div>
 
       {/* Footer Branding */}
       <div className="text-center text-[10px] text-slate-600 font-medium tracking-widest uppercase">
-        Built for Friends & Box Cricket
+        Built for Friends with Hearts ❤️
       </div>
     </div>
   );

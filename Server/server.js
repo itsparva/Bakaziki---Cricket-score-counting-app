@@ -45,7 +45,7 @@ mongoose.connect(process.env.MONGO_URI)
 // 3. API ROUTES
 // ==========================================
 app.get('/', (req, res) => {
-  res.send('🏏 GullyScorer Backend is Live and Running!');
+  res.send('🏏 Bakaziki Backend is Live and Running!');
 });
 
 app.post('/api/match', async (req, res) => {
