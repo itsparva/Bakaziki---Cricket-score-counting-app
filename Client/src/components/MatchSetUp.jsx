@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 
 export default function MatchSetup({ onBack, onStartMatch }) {
   const [matchDetails, setMatchDetails] = useState({
+    venue: '', // NEW: Venue Field
     teamA: 'Team A',
     teamB: 'Team B',
     overs: 5,
-    playersA: ['', '', '', '', ''], // Default to 5 empty slots
+    playersA: ['', '', '', '', ''],
     playersB: ['', '', '', '', ''],
     tossWinner: 'teamA',
     optedTo: 'bat'
@@ -28,9 +29,15 @@ export default function MatchSetup({ onBack, onStartMatch }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Clean up empty player names before starting
+    
+    // NEW: Auto-generate the current date when they hit "Let's Play"
+    const currentDate = new Date().toLocaleDateString(undefined, { 
+      year: 'numeric', month: 'short', day: 'numeric' 
+    });
+
     const cleanedDetails = {
       ...matchDetails,
+      matchDate: currentDate, // Stamped into the permanent record
       playersA: matchDetails.playersA.filter(p => p.trim() !== ''),
       playersB: matchDetails.playersB.filter(p => p.trim() !== '')
     };
@@ -50,17 +57,30 @@ export default function MatchSetup({ onBack, onStartMatch }) {
       {/* Scrollable Form */}
       <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-6 pb-24">
         
-        {/* Match Settings */}
-        <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm">
-          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Total Overs</label>
-          <div className="flex items-center gap-4">
-            <button type="button" onClick={() => setMatchDetails(prev => ({...prev, overs: Math.max(1, prev.overs - 1)}))} className="bg-slate-800 w-10 h-10 rounded-lg font-bold text-xl active:bg-slate-700">-</button>
-            <span className="text-2xl font-black w-12 text-center">{matchDetails.overs}</span>
-            <button type="button" onClick={() => setMatchDetails(prev => ({...prev, overs: prev.overs + 1}))} className="bg-slate-800 w-10 h-10 rounded-lg font-bold text-xl active:bg-slate-700">+</button>
+        {/* Match Settings & Venue */}
+        <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Total Overs</label>
+            <div className="flex items-center gap-4">
+              <button type="button" onClick={() => setMatchDetails(prev => ({...prev, overs: Math.max(1, prev.overs - 1)}))} className="bg-slate-800 w-10 h-10 rounded-lg font-bold text-xl active:bg-slate-700">-</button>
+              <span className="text-2xl font-black w-12 text-center">{matchDetails.overs}</span>
+              <button type="button" onClick={() => setMatchDetails(prev => ({...prev, overs: prev.overs + 1}))} className="bg-slate-800 w-10 h-10 rounded-lg font-bold text-xl active:bg-slate-700">+</button>
+            </div>
+          </div>
+          
+          <div className="pt-2 border-t border-slate-800">
+            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Venue / Ground (Optional)</label>
+            <input
+              type="text"
+              value={matchDetails.venue}
+              onChange={(e) => setMatchDetails({...matchDetails, venue: e.target.value})}
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-3 text-sm focus:outline-none focus:border-amber-500 transition-colors placeholder-slate-600 font-bold"
+              placeholder="e.g. L.D. College Ground"
+            />
           </div>
         </div>
 
-        {/* Team Configuration - Reusable Block */}
+        {/* Team Configuration */}
         {['A', 'B'].map((teamLetter) => {
           const teamKey = `team${teamLetter}`;
           const playersKey = `players${teamLetter}`;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import PostMatchSummary from './PostMatchSummary';
 
-export default function UmpireConsole({ matchData }) {
+export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEndMatch Prop added
   const [innings, setInnings] = useState(1);
   const [firstInningsStats, setFirstInningsStats] = useState(null);
   const [matchComplete, setMatchComplete] = useState(false);
@@ -31,6 +31,7 @@ export default function UmpireConsole({ matchData }) {
   // Modals
   const [wicketModal, setWicketModal] = useState({ isOpen: false, type: '', fielder: '' });
   const [extraModal, setExtraModal] = useState({ isOpen: false, type: 'WD', runs: 0 });
+  const [exitModalOpen, setExitModalOpen] = useState(false); // NEW: Exit Modal State
 
   const getInitialStats = () => {
     const s = { batting: {}, bowling: {} };
@@ -46,7 +47,6 @@ export default function UmpireConsole({ matchData }) {
   const targetReached = innings === 2 && firstInningsStats && runs >= firstInningsStats.target;
   const isInningsComplete = isAllOut || isOversFinished || targetReached;
 
-  // FIX: Make sure any ball that is not a WD or NB is counted as a valid delivery.
   const validBallsInCurrentOver = currentOverHistory.filter(b => !b.includes('WD') && !b.includes('NB')).length;
   const isOverComplete = validBallsInCurrentOver >= 6;
 
@@ -79,7 +79,6 @@ export default function UmpireConsole({ matchData }) {
     setBalls(prev => prev + 1);
     setCurrentOverHistory(prev => [...prev, runValue.toString()]);
 
-    // FIX: Deep clone stats so history stack isn't corrupted
     const newStats = JSON.parse(JSON.stringify(stats));
     
     newStats.batting[striker].runs += runValue;
@@ -93,7 +92,6 @@ export default function UmpireConsole({ matchData }) {
     if (runValue % 2 !== 0) rotateStrike(striker, nonStriker);
   };
 
-  // --- NEW EXTRAS LOGIC ---
   const confirmExtra = () => {
     saveSnapshot();
     const newStats = JSON.parse(JSON.stringify(stats));
@@ -104,13 +102,11 @@ export default function UmpireConsole({ matchData }) {
     let ballLabel = '';
 
     if (type === 'WD') {
-      // Wides: 1 run + any ran runs. All charged to bowler. 0 Balls faced/bowled.
       totalRunsAdded = 1 + extraRuns;
       newStats.bowling[bowler].runs += totalRunsAdded;
       ballLabel = extraRuns > 0 ? `${totalRunsAdded}WD` : 'WD';
     } 
     else if (type === 'NB') {
-      // No Ball: 1 run penalty + ran runs. Ran runs go to batsman. 1 Ball faced, 0 Balls bowled.
       totalRunsAdded = 1 + extraRuns;
       newStats.bowling[bowler].runs += totalRunsAdded;
       newStats.batting[striker].runs += extraRuns;
@@ -118,7 +114,6 @@ export default function UmpireConsole({ matchData }) {
       ballLabel = extraRuns > 0 ? `${totalRunsAdded}NB` : 'NB';
     } 
     else if (type === 'B' || type === 'LB') {
-      // Byes / Leg Byes: Only ran runs. Not charged to bowler. 1 Legal delivery.
       totalRunsAdded = extraRuns;
       newStats.batting[striker].balls += 1;
       newStats.bowling[bowler].balls += 1;
@@ -146,7 +141,6 @@ export default function UmpireConsole({ matchData }) {
     setBalls(prev => prev + 1);
     setCurrentOverHistory(prev => [...prev, 'W']);
 
-    // Deep clone to protect history
     const newStats = JSON.parse(JSON.stringify(stats));
     newStats.batting[striker].out = true;
     newStats.batting[striker].balls += 1;
@@ -205,7 +199,7 @@ export default function UmpireConsole({ matchData }) {
         liveState: { innings, battingTeam: matchData[battingTeam], firstInningsStats, runs, wickets, balls, currentOverHistory, pastOvers, striker, nonStriker, bowler, fallOfWickets },
         stats: stats,
         isComplete: matchComplete,
-        finalResult: matchComplete ? { t1: firstInningsStats, t2: { team: matchData[battingTeam], runs, wickets, stats }, resultMessage: "Match Over" } : null
+        finalResult: matchComplete ? { t1: firstInningsStats, t2: { team: matchData[battingTeam], runs, wickets, stats }, resultMessage: "Match Over", setupData: matchData.setupData } : null
       };
 
       axios.put(`https://bakaziki-cricket-score-counting-app.onrender.com/api/match/${matchData.matchId}`, payload)
@@ -222,20 +216,38 @@ export default function UmpireConsole({ matchData }) {
     if (isWin) resultMsg = `${t2Name} Won by ${totalWicketsAvailable - wickets} wickets!`;
     else if (firstInningsStats.runs > runs) resultMsg = `${firstInningsStats.team} Won by ${firstInningsStats.runs - runs} runs!`;
 
-    const finalData = { t1: firstInningsStats, t2: { team: t2Name, runs, wickets, stats }, resultMessage: resultMsg };
+    const finalData = { t1: firstInningsStats, t2: { team: t2Name, runs, wickets, stats }, resultMessage: resultMsg, setupData: matchData.setupData };
     return <PostMatchSummary finalData={finalData} />;
   }
 
   if (wickets === 0 && !striker && !nonStriker && !isInningsComplete) {
     const available = matchData[battingTeamKey];
     return (
-      <div className="p-6 h-full bg-slate-950 text-white flex flex-col">
-        <h3 className="text-xl font-bold text-amber-500 mb-4 uppercase">Select Opening Batsmen</h3>
+      <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-amber-500 uppercase">Select Openers</h3>
+          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
+        </div>
         <div className="space-y-2 flex-1 overflow-y-auto">
           {available.map(p => (
             <button key={p} onClick={() => striker ? setNonStriker(p) : setStriker(p)} disabled={striker === p} className={`w-full p-4 rounded-xl font-bold text-left border transition-all ${striker === p ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-900 border-slate-700 hover:bg-slate-800'}`}>{p} {striker === p && '(Striker)'}</button>
           ))}
         </div>
+        
+        {/* DUPLICATE EXIT MODAL FOR OPENING SCREEN */}
+        {exitModalOpen && (
+          <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
+            <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
+              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">⚠️</div>
+              <h3 className="text-xl font-black text-white uppercase mb-2">Abandon Match?</h3>
+              <p className="text-sm text-slate-400 mb-6">Are you sure you want to exit? This will delete your local umpire session. This cannot be undone.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setExitModalOpen(false)} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold active:scale-95">Cancel</button>
+                <button onClick={onEndMatch} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase active:scale-95 shadow-lg shadow-red-600/30">Abandon</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -243,13 +255,31 @@ export default function UmpireConsole({ matchData }) {
   if (!striker && !isLastManStanding && !isInningsComplete) {
     const available = matchData[battingTeamKey].filter(p => p !== nonStriker && !stats.batting[p].out);
     return (
-      <div className="p-6 h-full bg-slate-950 text-white flex flex-col">
-        <h3 className="text-xl font-bold text-amber-500 mb-4 uppercase">Select Next Batsman</h3>
+      <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-amber-500 uppercase">Select Next Batsman</h3>
+          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
+        </div>
         <div className="space-y-2 flex-1 overflow-y-auto">
           {available.map(p => (
             <button key={p} onClick={() => setStriker(p)} className="w-full p-4 rounded-xl font-bold text-left bg-slate-900 border border-slate-700 active:scale-95 text-emerald-400">{p}</button>
           ))}
         </div>
+
+        {/* DUPLICATE EXIT MODAL */}
+        {exitModalOpen && (
+          <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
+            <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
+              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">⚠️</div>
+              <h3 className="text-xl font-black text-white uppercase mb-2">Abandon Match?</h3>
+              <p className="text-sm text-slate-400 mb-6">Are you sure you want to exit? This will stop the live broadcast and clear your session.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setExitModalOpen(false)} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold active:scale-95">Cancel</button>
+                <button onClick={onEndMatch} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase active:scale-95 shadow-lg shadow-red-600/30">Abandon</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -258,8 +288,11 @@ export default function UmpireConsole({ matchData }) {
     const prevOverBowler = pastOvers.length > 0 ? historyStack[historyStack.length - 1]?.bowler : null;
     const available = matchData[bowlingTeamKey];
     return (
-      <div className="p-6 h-full bg-slate-950 text-white flex flex-col">
-        <h3 className="text-xl font-bold text-emerald-500 mb-4 uppercase">Select Bowler</h3>
+      <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-emerald-500 uppercase">Select Bowler</h3>
+          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
+        </div>
         <div className="space-y-2 flex-1 overflow-y-auto">
           {available.map(p => {
             const isRestricted = p === prevOverBowler && available.length > 1;
@@ -268,6 +301,21 @@ export default function UmpireConsole({ matchData }) {
             );
           })}
         </div>
+
+        {/* DUPLICATE EXIT MODAL */}
+        {exitModalOpen && (
+          <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
+            <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
+              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">⚠️</div>
+              <h3 className="text-xl font-black text-white uppercase mb-2">Abandon Match?</h3>
+              <p className="text-sm text-slate-400 mb-6">Are you sure you want to exit? This will stop the live broadcast and clear your session.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setExitModalOpen(false)} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold active:scale-95">Cancel</button>
+                <button onClick={onEndMatch} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase active:scale-95 shadow-lg shadow-red-600/30">Abandon</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -275,6 +323,24 @@ export default function UmpireConsole({ matchData }) {
   return (
     <div className="flex flex-col h-full bg-slate-950 text-white select-none relative">
       
+      {/* --- NEW: EXIT CONFIRMATION MODAL --- */}
+      {exitModalOpen && (
+        <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
+          <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+              ⚠️
+            </div>
+            <h3 className="text-xl font-black text-white uppercase mb-2">Abandon Match?</h3>
+            <p className="text-sm text-slate-400 mb-6">Are you sure you want to exit? This will stop the live broadcast and clear your umpire session. This cannot be undone.</p>
+            
+            <div className="flex gap-3">
+              <button onClick={() => setExitModalOpen(false)} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold active:scale-95">Cancel</button>
+              <button onClick={onEndMatch} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase active:scale-95 shadow-lg shadow-red-600/30">Abandon</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* EXTRAS MODAL */}
       {extraModal.isOpen && (
         <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
@@ -332,9 +398,16 @@ export default function UmpireConsole({ matchData }) {
       {/* Header & Scoreboard */}
       <div className="bg-slate-900 pt-5 pb-3 px-4 border-b border-slate-800 shadow-xl z-10 shrink-0">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-xs font-bold text-red-500 animate-pulse uppercase tracking-widest px-2 py-1 bg-red-500/10 rounded-lg">Inn {innings}</span>
-          <span className="text-xs text-amber-500 font-mono tracking-widest bg-slate-800 px-2 py-1 rounded">ID: {matchData.matchId}</span>
-          {innings === 2 && firstInningsStats && <span className="text-xs text-amber-400 font-bold bg-amber-400/10 px-2 py-1 rounded-lg">Target: {firstInningsStats.target}</span>}
+          {/* NEW: Flex wrapper to group stats on the left and the exit button on the right */}
+          <div className="flex gap-2 items-center">
+            <span className="text-xs font-bold text-red-500 animate-pulse uppercase tracking-widest px-2 py-1 bg-red-500/10 rounded-lg">Inn {innings}</span>
+            <span className="text-xs text-amber-500 font-mono tracking-widest bg-slate-800 px-2 py-1 rounded">ID: {matchData.matchId}</span>
+            {innings === 2 && firstInningsStats && <span className="text-xs text-amber-400 font-bold bg-amber-400/10 px-2 py-1 rounded-lg">Target: {firstInningsStats.target}</span>}
+          </div>
+          {/* NEW: The Exit Button */}
+          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform" aria-label="Abandon Match">
+            ✕ Exit
+          </button>
         </div>
         
         <div className="text-center mb-3">
