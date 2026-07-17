@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import HomeDashboard from './components/HomeDashboard';
-import MatchSetup from './components/MatchSetup';
+import MatchSetup from './components/MatchSetUps';
 import UmpireConsole from './components/UmpireConsole';
 import SpectatorView from './components/SpectatorView';
 
