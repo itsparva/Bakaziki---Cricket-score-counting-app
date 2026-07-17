@@ -12,7 +12,7 @@ export default function App() {
   const [activeMatchData, setActiveMatchData] = useState(null);
   const [spectatorMatchId, setSpectatorMatchId] = useState('');
 
-  // NEW: Check local storage on initial load to survive refreshes
+  // Local storage check on initial load
   useEffect(() => {
     const savedMatch = localStorage.getItem('bakaziki_active_match');
     if (savedMatch) {
@@ -20,6 +20,25 @@ export default function App() {
       setCurrentScreen('scoring');
     }
   }, []);
+
+  // --- NEW: UNIVERSAL ACCIDENTAL RELOAD PREVENTION ---
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // Only show the warning if they are actively setting up or scoring a match
+      if (currentScreen === 'setup' || currentScreen === 'scoring') {
+        e.preventDefault();
+        // This standard string triggers the browser's native "Leave Site?" warning prompt
+        e.returnValue = ''; 
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Cleanup the listener when the component unmounts
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentScreen]);
 
   const handleNavigation = async (data, isSpectator = false) => {
     if (isSpectator) {
@@ -35,7 +54,6 @@ export default function App() {
           setupData: matchDetails
         });
         
-        // NEW: Save to local storage before navigating
         localStorage.setItem('bakaziki_active_match', JSON.stringify(matchDetails));
         setActiveMatchData(matchDetails);
         setCurrentScreen('scoring');
@@ -52,7 +70,6 @@ export default function App() {
     }
   };
 
-  // NEW: A function to clear storage when a match naturally ends
   const handleEndMatch = () => {
     localStorage.removeItem('bakaziki_active_match');
     setActiveMatchData(null);
