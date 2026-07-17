@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import PostMatchSummary from './PostMatchSummary';
 
-export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEndMatch Prop added
+export default function UmpireConsole({ matchData, onEndMatch }) {
   const [innings, setInnings] = useState(1);
   const [firstInningsStats, setFirstInningsStats] = useState(null);
   const [matchComplete, setMatchComplete] = useState(false);
@@ -28,10 +28,10 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
   const [bowler, setBowler] = useState(null);
   const [historyStack, setHistoryStack] = useState([]); 
   
-  // Modals
-  const [wicketModal, setWicketModal] = useState({ isOpen: false, type: '', fielder: '' });
+  // Modals (Upgraded with runOutEnd)
+  const [wicketModal, setWicketModal] = useState({ isOpen: false, type: '', fielder: '', runOutBatsman: '', runOutRuns: 0, runOutEnd: '' });
   const [extraModal, setExtraModal] = useState({ isOpen: false, type: 'WD', runs: 0 });
-  const [exitModalOpen, setExitModalOpen] = useState(false); // NEW: Exit Modal State
+  const [exitModalOpen, setExitModalOpen] = useState(false); 
 
   const getInitialStats = () => {
     const s = { batting: {}, bowling: {} };
@@ -130,42 +130,75 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
     setExtraModal({ isOpen: false, type: 'WD', runs: 0 });
   };
 
-  const triggerWicketModal = () => setWicketModal({ isOpen: true, type: '', fielder: '' });
+  const triggerWicketModal = () => setWicketModal({ isOpen: true, type: '', fielder: '', runOutBatsman: '', runOutRuns: 0, runOutEnd: '' });
 
   const confirmWicket = () => {
     saveSnapshot();
-    const overString = `${Math.floor(balls / 6)}.${balls % 6}`;
-    setFallOfWickets(prev => [...prev, { score: runs, wicket: wickets + 1, over: overString, player: striker }]);
-
-    setWickets(prev => prev + 1);
-    setBalls(prev => prev + 1);
-    setCurrentOverHistory(prev => [...prev, 'W']);
-
+    const { type, fielder, runOutBatsman, runOutRuns, runOutEnd } = wicketModal;
     const newStats = JSON.parse(JSON.stringify(stats));
-    newStats.batting[striker].out = true;
+
+    let runsToAdd = type === 'Run Out' ? runOutRuns : 0;
+    const outPlayer = type === 'Run Out' ? runOutBatsman : striker;
+    const overString = `${Math.floor(balls / 6)}.${balls % 6}`;
+
+    setFallOfWickets(prev => [...prev, { score: runs + runsToAdd, wicket: wickets + 1, over: overString, player: outPlayer }]);
+    setRuns(prev => prev + runsToAdd);
+    setWickets(prev => prev + 1);
+    setBalls(prev => prev + 1); 
+
+    let ballHistoryLabel = type === 'Run Out' && runsToAdd > 0 ? `${runsToAdd}+W` : 'W';
+    setCurrentOverHistory(prev => [...prev, ballHistoryLabel]);
+
+    if (runsToAdd > 0) {
+      newStats.batting[striker].runs += runsToAdd;
+      newStats.bowling[bowler].runs += runsToAdd;
+    }
+    
     newStats.batting[striker].balls += 1;
+    newStats.batting[outPlayer].out = true;
 
     let dismissalStr = '';
-    const { type, fielder } = wicketModal;
     if (type === 'Bowled') dismissalStr = `b ${bowler}`;
     else if (type === 'LBW') dismissalStr = `lbw b ${bowler}`;
     else if (type === 'Caught') dismissalStr = `c ${fielder} b ${bowler}`;
     else if (type === 'Run Out') dismissalStr = `run out (${fielder})`;
     else if (type === 'Stumped') dismissalStr = `st ${fielder} b ${bowler}`;
-    else dismissalStr = type;
-
-    newStats.batting[striker].dismissal = dismissalStr;
+    
+    newStats.batting[outPlayer].dismissal = dismissalStr;
 
     if (type !== 'Run Out') newStats.bowling[bowler].wickets += 1;
     newStats.bowling[bowler].balls += 1;
     
     setStats(newStats);
-    setStriker(null); 
-    if (wickets + 1 === totalWickets - 1) {
-      setStriker(nonStriker);
-      setNonStriker(null);
+
+    // ==========================================
+    // THE NEW GENIUS RUN OUT ENGINE
+    // ==========================================
+    if (type === 'Run Out') {
+      const survivingBatsman = outPlayer === striker ? nonStriker : striker;
+      
+      if (runOutEnd === 'striker') {
+        // The wicket fell at the striker's end. The new batsman goes there.
+        setStriker(null); 
+        setNonStriker(survivingBatsman);
+      } else {
+        // The wicket fell at the non-striker's end. The new batsman goes there.
+        setNonStriker(null); 
+        setStriker(survivingBatsman);
+      }
+    } else {
+      // Normal wickets always empty the striker slot
+      setStriker(null); 
     }
-    setWicketModal({ isOpen: false, type: '', fielder: '' });
+
+    if (wickets + 1 === totalWickets - 1) {
+      if (!striker && nonStriker) {
+          setStriker(nonStriker);
+          setNonStriker(null);
+      }
+    }
+
+    setWicketModal({ isOpen: false, type: '', fielder: '', runOutBatsman: '', runOutRuns: 0, runOutEnd: '' });
   };
 
   const handleStartNextOver = () => {
@@ -179,8 +212,18 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
   const handleInningsTransition = () => {
     if (innings === 1) {
       setFirstInningsStats({ team: matchData[battingTeam], runs, wickets, target: runs + 1, stats, fallOfWickets });
+      
+      const nextBattingTeam = battingTeam === 'teamA' ? 'teamB' : 'teamA';
+      const nextBattingKey = nextBattingTeam === 'teamA' ? 'playersA' : 'playersB';
+      const nextBowlingKey = nextBattingTeam === 'teamA' ? 'playersB' : 'playersA';
+
+      const newStats = { batting: {}, bowling: {} };
+      matchData[nextBattingKey].forEach(p => newStats.batting[p] = { runs: 0, balls: 0, fours: 0, sixes: 0, out: false, dismissal: '' });
+      matchData[nextBowlingKey].forEach(p => newStats.bowling[p] = { runs: 0, balls: 0, wickets: 0 });
+
+      setStats(newStats);
       setInnings(2);
-      setBattingTeam(battingTeam === 'teamA' ? 'teamB' : 'teamA');
+      setBattingTeam(nextBattingTeam);
       setRuns(0); setWickets(0); setBalls(0);
       setCurrentOverHistory([]); setPastOvers([]); setHistoryStack([]); setFallOfWickets([]);
       setStriker(null); setNonStriker(null); setBowler(null);
@@ -220,53 +263,28 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
     return <PostMatchSummary finalData={finalData} />;
   }
 
-  if (wickets === 0 && !striker && !nonStriker && !isInningsComplete) {
-    const available = matchData[battingTeamKey];
+  if ((!striker || !nonStriker) && !isLastManStanding && !isInningsComplete) {
+    const missingRole = !striker ? 'Striker' : 'Non-Striker';
+    const available = matchData[battingTeamKey].filter(p => p !== striker && p !== nonStriker && stats.batting[p] && !stats.batting[p].out);
+    
     return (
       <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-amber-500 uppercase">Select Openers</h3>
+          <h3 className="text-xl font-bold text-amber-500 uppercase">Select {missingRole}</h3>
           <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
         </div>
         <div className="space-y-2 flex-1 overflow-y-auto">
           {available.map(p => (
-            <button key={p} onClick={() => striker ? setNonStriker(p) : setStriker(p)} disabled={striker === p} className={`w-full p-4 rounded-xl font-bold text-left border transition-all ${striker === p ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-900 border-slate-700 hover:bg-slate-800'}`}>{p} {striker === p && '(Striker)'}</button>
+            <button 
+              key={p} 
+              onClick={() => !striker ? setStriker(p) : setNonStriker(p)} 
+              className="w-full p-4 rounded-xl font-bold text-left bg-slate-900 border border-slate-700 hover:bg-slate-800 active:scale-95 text-emerald-400 transition-all"
+            >
+              {p}
+            </button>
           ))}
         </div>
         
-        {/* DUPLICATE EXIT MODAL FOR OPENING SCREEN */}
-        {exitModalOpen && (
-          <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
-            <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
-              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">⚠️</div>
-              <h3 className="text-xl font-black text-white uppercase mb-2">Abandon Match?</h3>
-              <p className="text-sm text-slate-400 mb-6">Are you sure you want to exit? This will delete your local umpire session. This cannot be undone.</p>
-              <div className="flex gap-3">
-                <button onClick={() => setExitModalOpen(false)} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold active:scale-95">Cancel</button>
-                <button onClick={onEndMatch} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase active:scale-95 shadow-lg shadow-red-600/30">Abandon</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (!striker && !isLastManStanding && !isInningsComplete) {
-    const available = matchData[battingTeamKey].filter(p => p !== nonStriker && !stats.batting[p].out);
-    return (
-      <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-amber-500 uppercase">Select Next Batsman</h3>
-          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
-        </div>
-        <div className="space-y-2 flex-1 overflow-y-auto">
-          {available.map(p => (
-            <button key={p} onClick={() => setStriker(p)} className="w-full p-4 rounded-xl font-bold text-left bg-slate-900 border border-slate-700 active:scale-95 text-emerald-400">{p}</button>
-          ))}
-        </div>
-
-        {/* DUPLICATE EXIT MODAL */}
         {exitModalOpen && (
           <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
             <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
@@ -302,7 +320,6 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
           })}
         </div>
 
-        {/* DUPLICATE EXIT MODAL */}
         {exitModalOpen && (
           <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
             <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
@@ -323,16 +340,13 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
   return (
     <div className="flex flex-col h-full bg-slate-950 text-white select-none relative">
       
-      {/* --- NEW: EXIT CONFIRMATION MODAL --- */}
+      {/* EXIT CONFIRMATION MODAL */}
       {exitModalOpen && (
         <div className="absolute inset-0 bg-slate-950/90 z-50 p-6 flex flex-col justify-center">
           <div className="bg-slate-900 border border-red-500/50 rounded-2xl p-6 shadow-2xl text-center">
-            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-              ⚠️
-            </div>
+            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">⚠️</div>
             <h3 className="text-xl font-black text-white uppercase mb-2">Abandon Match?</h3>
             <p className="text-sm text-slate-400 mb-6">Are you sure you want to exit? This will stop the live broadcast and clear your umpire session. This cannot be undone.</p>
-            
             <div className="flex gap-3">
               <button onClick={() => setExitModalOpen(false)} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold active:scale-95">Cancel</button>
               <button onClick={onEndMatch} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-black uppercase active:scale-95 shadow-lg shadow-red-600/30">Abandon</button>
@@ -374,22 +388,89 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
             <h3 className="text-xl font-black text-red-500 uppercase mb-4 text-center">How was {striker} out?</h3>
             <div className="grid grid-cols-2 gap-2 mb-4">
               {['Bowled', 'Caught', 'LBW', 'Run Out', 'Stumped'].map(type => (
-                <button key={type} onClick={() => setWicketModal({...wicketModal, type, fielder: ''})} className={`py-3 rounded-lg font-bold border transition-colors ${wicketModal.type === type ? 'bg-red-500 text-white border-red-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{type}</button>
+                <button 
+                  key={type} 
+                  onClick={() => setWicketModal({...wicketModal, type, fielder: '', runOutBatsman: type === 'Run Out' ? striker : '', runOutRuns: 0, runOutEnd: ''})} 
+                  className={`py-3 rounded-lg font-bold border transition-colors ${wicketModal.type === type ? 'bg-red-500 text-white border-red-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                >
+                  {type}
+                </button>
               ))}
             </div>
+
+            {/* UPGRADED: Run Out Specific Fields */}
+            {wicketModal.type === 'Run Out' && (
+              <div className="mb-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-2">Runs Completed Before Out</p>
+                <div className="grid grid-cols-4 gap-2 mb-4">
+                  {[0, 1, 2, 3].map(r => (
+                    <button 
+                      key={r} 
+                      onClick={() => setWicketModal({...wicketModal, runOutRuns: r})} 
+                      className={`py-2 rounded-lg font-bold border ${wicketModal.runOutRuns === r ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                
+                <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-2">Who is Out?</p>
+                <div className="flex gap-2 mb-4">
+                  <button 
+                    onClick={() => setWicketModal({...wicketModal, runOutBatsman: striker})} 
+                    className={`flex-1 py-2 text-sm rounded-lg font-bold border truncate px-1 ${wicketModal.runOutBatsman === striker ? 'bg-red-500 text-white border-red-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                  >
+                    {striker} (Str)
+                  </button>
+                  {nonStriker && (
+                    <button 
+                      onClick={() => setWicketModal({...wicketModal, runOutBatsman: nonStriker})} 
+                      className={`flex-1 py-2 text-sm rounded-lg font-bold border truncate px-1 ${wicketModal.runOutBatsman === nonStriker ? 'bg-red-500 text-white border-red-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                    >
+                      {nonStriker} (Non-Str)
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-2">At Which End?</p>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setWicketModal({...wicketModal, runOutEnd: 'striker'})} 
+                    className={`flex-1 py-2 text-sm rounded-lg font-bold border truncate px-1 ${wicketModal.runOutEnd === 'striker' ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                  >
+                    Striker's End
+                  </button>
+                  <button 
+                    onClick={() => setWicketModal({...wicketModal, runOutEnd: 'non_striker'})} 
+                    className={`flex-1 py-2 text-sm rounded-lg font-bold border truncate px-1 ${wicketModal.runOutEnd === 'non_striker' ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}
+                  >
+                    Non-Striker's End
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Original Fielder Selection */}
             {['Caught', 'Run Out', 'Stumped'].includes(wicketModal.type) && (
               <div className="mb-6">
                 <p className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-2">Select Fielder</p>
-                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                   {fieldingTeamList.map(fielder => (
                     <button key={fielder} onClick={() => setWicketModal({...wicketModal, fielder})} className={`py-2 px-2 text-sm rounded-lg font-bold border transition-colors ${wicketModal.fielder === fielder ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{fielder}</button>
                   ))}
                 </div>
               </div>
             )}
+            
             <div className="flex gap-3 mt-4">
-              <button onClick={() => setWicketModal({isOpen: false, type: '', fielder: ''})} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold">Cancel</button>
-              <button onClick={confirmWicket} disabled={!wicketModal.type || (['Caught', 'Run Out', 'Stumped'].includes(wicketModal.type) && !wicketModal.fielder)} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-black uppercase disabled:opacity-50 disabled:bg-slate-700">Confirm Out</button>
+              <button onClick={() => setWicketModal({isOpen: false, type: '', fielder: '', runOutBatsman: '', runOutRuns: 0, runOutEnd: ''})} className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold">Cancel</button>
+              <button 
+                onClick={confirmWicket} 
+                disabled={!wicketModal.type || (['Caught', 'Run Out', 'Stumped'].includes(wicketModal.type) && !wicketModal.fielder) || (wicketModal.type === 'Run Out' && (!wicketModal.runOutBatsman || !wicketModal.runOutEnd))} 
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-black uppercase disabled:opacity-50 disabled:bg-slate-700"
+              >
+                Confirm Out
+              </button>
             </div>
           </div>
         </div>
@@ -398,13 +479,11 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
       {/* Header & Scoreboard */}
       <div className="bg-slate-900 pt-5 pb-3 px-4 border-b border-slate-800 shadow-xl z-10 shrink-0">
         <div className="flex justify-between items-center mb-2">
-          {/* NEW: Flex wrapper to group stats on the left and the exit button on the right */}
           <div className="flex gap-2 items-center">
             <span className="text-xs font-bold text-red-500 animate-pulse uppercase tracking-widest px-2 py-1 bg-red-500/10 rounded-lg">Inn {innings}</span>
             <span className="text-xs text-amber-500 font-mono tracking-widest bg-slate-800 px-2 py-1 rounded">ID: {matchData.matchId}</span>
             {innings === 2 && firstInningsStats && <span className="text-xs text-amber-400 font-bold bg-amber-400/10 px-2 py-1 rounded-lg">Target: {firstInningsStats.target}</span>}
           </div>
-          {/* NEW: The Exit Button */}
           <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform" aria-label="Abandon Match">
             ✕ Exit
           </button>
@@ -449,7 +528,7 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
           <span className="text-xs text-slate-500 font-bold uppercase mr-3">Over:</span>
           <div className="flex gap-2">
             {currentOverHistory.map((ball, i) => (
-              <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md ${ball === 'W' ? 'bg-red-500 text-white' : ball === '4' || ball === '6' ? 'bg-emerald-500 text-slate-950' : ball.includes('WD') || ball.includes('NB') ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>{ball}</div>
+              <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md ${ball === 'W' || ball.includes('W') && !ball.includes('WD') ? 'bg-red-500 text-white' : ball === '4' || ball === '6' ? 'bg-emerald-500 text-slate-950' : ball.includes('WD') || ball.includes('NB') ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>{ball}</div>
             ))}
           </div>
         </div>
@@ -490,7 +569,7 @@ export default function UmpireConsole({ matchData, onEndMatch }) { // NEW: onEnd
                   <div className="flex gap-1 flex-wrap">
                     {over.map((ball, i) => {
                       let btnStyle = 'bg-slate-800 text-slate-300';
-                      if (ball === 'W') btnStyle = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                      if (ball === 'W' || ball.includes('W') && !ball.includes('WD')) btnStyle = 'bg-red-500/20 text-red-400 border border-red-500/30';
                       if (ball === '4' || ball === '6') btnStyle = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
                       if (ball.includes('WD') || ball.includes('NB')) btnStyle = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
                       return <span key={i} className={`text-xs font-bold px-2 py-1 rounded shadow-sm ${btnStyle}`}>{ball}</span>;

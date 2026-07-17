@@ -271,7 +271,7 @@ export default function SpectatorView({ matchId, onBack }) {
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/40">
               <div className="relative w-32 h-40 mb-4">
                 {/* Ground */}
-                <rect x="0" y="150" width="100%" height="4" fill="#334155" className="absolute bottom-0 w-full h-1 bg-slate-700"/>
+                <div className="absolute bottom-0 w-full h-1 bg-slate-700"></div>
                 {/* Left Stump */}
                 <div className="absolute bottom-1 left-[20%] w-3 h-24 bg-amber-500 rounded-t-sm shadow-[inset_-2px_0_4px_rgba(0,0,0,0.3)]"></div>
                 {/* Right Stump */}
