@@ -59,17 +59,38 @@ export default function UmpireConsole({ matchData, onEndMatch }) {
   if (!scoring.bowler && !scoring.isInningsComplete) {
     const prevOverBowler = scoring.pastOvers.length > 0 ? scoring.historyStack[scoring.historyStack.length - 1]?.bowler : null;
     const available = matchData[scoring.bowlingTeamKey];
+    
     return (
       <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-emerald-500 uppercase">{scoring.matchStage === 'superOver' && <span className="text-red-500 block text-xs">SUPER OVER</span>} Select Bowler</h3>
+          <h3 className="text-xl font-bold text-emerald-500 uppercase">
+            {scoring.matchStage === 'superOver' && <span className="text-red-500 block text-xs">SUPER OVER</span>}
+            Select Bowler
+          </h3>
           <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
         </div>
+        
         <div className="space-y-2 flex-1 overflow-y-auto">
           {available.map((p) => {
-            const isRestricted = p === prevOverBowler && available.length > 1;
+            const bStats = scoring.getBowlerStats(p);
+            const isRestricted = (p === prevOverBowler && available.length > 1) || bStats.isFinished;
+            
             return (
-              <button key={p} onClick={() => scoring.setBowler(p)} disabled={isRestricted} className={`w-full p-4 rounded-xl font-bold text-left border transition-all ${isRestricted ? "bg-slate-950 border-slate-800 text-slate-600 opacity-50" : "bg-slate-900 border-slate-700 active:scale-95 text-amber-400"}`}>{p} {isRestricted && "(Bowled last over)"}</button>
+              <button 
+                key={p} 
+                onClick={() => scoring.setBowler(p)} 
+                disabled={isRestricted} 
+                className={`w-full p-4 rounded-xl font-bold text-left border transition-all ${
+                  isRestricted ? "bg-slate-950 border-slate-800 text-slate-600 opacity-50" : "bg-slate-900 border-slate-700 active:scale-95 text-amber-400"
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span>{p}</span>
+                  <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${bStats.remaining > 0 ? 'bg-slate-800 text-slate-400' : 'bg-red-900/50 text-red-400'}`}>
+                    {bStats.isFinished ? "Token limit reached" : `${bStats.remaining} overs left`}
+                  </span>
+                </div>
+              </button>
             );
           })}
         </div>

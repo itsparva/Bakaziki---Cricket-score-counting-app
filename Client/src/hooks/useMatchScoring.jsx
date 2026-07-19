@@ -69,6 +69,18 @@ export default function useMatchScoring(matchData) {
     setHistoryStack(prev => prev.slice(0, -1));
   };
 
+  const maxOversPerBowler = Math.ceil(targetOvers * 0.25);
+
+  const getBowlerStats = (bowlerName) => {
+    const s = stats.bowling[bowlerName];
+    const oversBowled = Math.floor((s?.balls || 0) / 6);
+    return {
+      oversBowled,
+      remaining: maxOversPerBowler - oversBowled,
+      isFinished: oversBowled >= maxOversPerBowler
+    };
+  };
+
   const rotateStrike = (currentStriker, currentNonStriker) => {
     if (isLastManStanding || !currentStriker || !currentNonStriker) return;
     setStriker(currentNonStriker);
@@ -291,6 +303,6 @@ export default function useMatchScoring(matchData) {
     striker, setStriker, nonStriker, setNonStriker, bowler, setBowler, stats, firstInningsStats, historyStack,
     targetOvers, totalWickets, battingTeamKey, bowlingTeamKey, fieldingTeamList,
     isLastManStanding, isAllOut, isOversFinished, targetReached, isInningsComplete, isOverComplete,
-    handleRun, processExtra, processWicket, handleStartNextOver, handleInningsTransition, handleUndo
+    handleRun, processExtra, processWicket, handleStartNextOver, handleInningsTransition, handleUndo, getBowlerStats, maxOversPerBowler
   };
 }
