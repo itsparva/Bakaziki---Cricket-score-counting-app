@@ -115,18 +115,30 @@ export default function UmpireConsole({ matchData, onEndMatch }) {
         <div className="flex justify-between bg-slate-950 border border-slate-800 p-3 rounded-xl text-sm shadow-inner">
           <div className="flex-1">
             {scoring.striker && (
-              <p className="text-emerald-400 font-bold truncate">🏏 {scoring.striker} <span className="text-white ml-1">{scoring.stats.batting[scoring.striker].runs} <span className="text-slate-500 text-xs">({scoring.stats.batting[scoring.striker].balls})</span></span></p>
-            )}
-            {scoring.nonStriker && !scoring.isLastManStanding && (
-              <p className="text-slate-400 truncate pl-5 mt-1">{scoring.nonStriker} <span className="text-slate-500 ml-1">{scoring.stats.batting[scoring.nonStriker].runs} <span className="text-xs">({scoring.stats.batting[scoring.nonStriker].balls})</span></span></p>
+              <p className="text-emerald-400 font-bold truncate">
+                🏏 {scoring.striker} 
+                <span className="text-white ml-1">
+                  {scoring.stats.batting[scoring.striker]?.runs || 0} 
+                  <span className="text-slate-500 text-xs">({scoring.stats.batting[scoring.striker]?.balls || 0})</span>
+                </span>
+              </p>
             )}
             {scoring.isLastManStanding && <p className="text-red-400 text-xs font-bold uppercase mt-1 pl-5">Last Man</p>}
+            {scoring.nonStriker && !scoring.isLastManStanding && (
+              <p className="text-slate-400 truncate pl-5 mt-1">
+                {scoring.nonStriker} 
+                <span className="text-slate-500 ml-1">
+                  {scoring.stats.batting[scoring.nonStriker]?.runs || 0} 
+                  <span className="text-xs">({scoring.stats.batting[scoring.nonStriker]?.balls || 0})</span>
+                </span>
+              </p>
+            )}
           </div>
           <div className="text-right flex-1 border-l border-slate-800 pl-3">
             {scoring.bowler && (
               <>
                 <p className="text-amber-400 font-bold truncate">⚾ {scoring.bowler}</p>
-                <p className="text-slate-300 mt-1">{scoring.stats.bowling[scoring.bowler].wickets} - {scoring.stats.bowling[scoring.bowler].runs} <span className="text-slate-500 text-xs">({Math.floor(scoring.stats.bowling[scoring.bowler].balls / 6)}.{scoring.stats.bowling[scoring.bowler].balls % 6})</span></p>
+                <p className="text-slate-300 mt-1">{scoring.stats.bowling[scoring.bowler]?.wickets || 0} - {scoring.stats.bowling[scoring.bowler]?.runs || 0} <span className="text-slate-500 text-xs">({Math.floor((scoring.stats.bowling[scoring.bowler]?.balls || 0) / 6)}.{(scoring.stats.bowling[scoring.bowler]?.balls || 0) % 6})</span></p>
               </>
             )}
           </div>

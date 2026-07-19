@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 
 export default function useMatchScoring(matchData) {
-  const [matchStage, setMatchStage] = useState('regular'); // 'regular' or 'superOver'
+  const [matchStage, setMatchStage] = useState('regular'); 
   const [regularStats, setRegularStats] = useState(null);
   const [innings, setInnings] = useState(1);
   const [firstInningsStats, setFirstInningsStats] = useState(null);
@@ -16,9 +16,11 @@ export default function useMatchScoring(matchData) {
   const bowlingTeamKey = battingTeam === "teamA" ? "playersB" : "playersA";
   const fieldingTeamList = matchData[bowlingTeamKey];
 
-  // --- FIXED: Wicket and Last Man Logic ---
+  // --- BULLETPROOF WICKET MATH ---
   const teamSize = matchData[battingTeamKey].length;
   const targetOvers = matchStage === 'superOver' ? 1 : parseInt(matchData.overs);
+  
+  // In a Super Over, max 2 wickets. Otherwise, all players can bat.
   const totalWickets = matchStage === 'superOver' ? Math.min(2, teamSize) : teamSize;
 
   const [runs, setRuns] = useState(0);
@@ -42,7 +44,7 @@ export default function useMatchScoring(matchData) {
   const [stats, setStats] = useState(getInitialStats());
 
   const isAllOut = wickets >= totalWickets;
-  // Last man standing only happens if we are at the second to last player on the ENTIRE team roster, and not all out.
+  // Last man standing only happens if exactly 1 player is left on the ENTIRE roster.
   const isLastManStanding = wickets === teamSize - 1 && !isAllOut; 
   const isOversFinished = balls >= targetOvers * 6;
   const targetReached = innings === 2 && firstInningsStats && runs >= firstInningsStats.target;
@@ -68,48 +70,56 @@ export default function useMatchScoring(matchData) {
   };
 
   const rotateStrike = (currentStriker, currentNonStriker) => {
-    if (isLastManStanding) return;
+    if (isLastManStanding || !currentStriker || !currentNonStriker) return;
     setStriker(currentNonStriker);
     setNonStriker(currentStriker);
   };
 
   const handleRun = (runValue) => {
+    if (!striker || !bowler || isInningsComplete) return; // Safety check
     saveSnapshot();
     setRuns(prev => prev + runValue);
     setBalls(prev => prev + 1);
     setCurrentOverHistory(prev => [...prev, runValue.toString()]);
 
     const newStats = JSON.parse(JSON.stringify(stats));
-    newStats.batting[striker].runs += runValue;
-    newStats.batting[striker].balls += 1;
-    if (runValue === 4) newStats.batting[striker].fours += 1;
-    if (runValue === 6) newStats.batting[striker].sixes += 1;
-    newStats.bowling[bowler].runs += runValue;
-    newStats.bowling[bowler].balls += 1;
+    if (newStats.batting[striker]) {
+      newStats.batting[striker].runs += runValue;
+      newStats.batting[striker].balls += 1;
+      if (runValue === 4) newStats.batting[striker].fours += 1;
+      if (runValue === 6) newStats.batting[striker].sixes += 1;
+    }
+    if (newStats.bowling[bowler]) {
+      newStats.bowling[bowler].runs += runValue;
+      newStats.bowling[bowler].balls += 1;
+    }
     setStats(newStats);
 
     if (runValue % 2 !== 0) rotateStrike(striker, nonStriker);
   };
 
   const processExtra = (type, extraRuns) => {
+    if (!striker || !bowler || isInningsComplete) return;
     saveSnapshot();
     const newStats = JSON.parse(JSON.stringify(stats));
     let totalRunsAdded = 0; let isLegalDelivery = false; let ballLabel = "";
 
     if (type === "WD") {
       totalRunsAdded = 1 + extraRuns;
-      newStats.bowling[bowler].runs += totalRunsAdded;
+      if (newStats.bowling[bowler]) newStats.bowling[bowler].runs += totalRunsAdded;
       ballLabel = extraRuns > 0 ? `${totalRunsAdded}WD` : "WD";
     } else if (type === "NB") {
       totalRunsAdded = 1 + extraRuns;
-      newStats.bowling[bowler].runs += totalRunsAdded;
-      newStats.batting[striker].runs += extraRuns;
-      newStats.batting[striker].balls += 1;
+      if (newStats.bowling[bowler]) newStats.bowling[bowler].runs += totalRunsAdded;
+      if (newStats.batting[striker]) {
+        newStats.batting[striker].runs += extraRuns;
+        newStats.batting[striker].balls += 1;
+      }
       ballLabel = extraRuns > 0 ? `${totalRunsAdded}NB` : "NB";
     } else if (type === "B" || type === "LB") {
       totalRunsAdded = extraRuns;
-      newStats.batting[striker].balls += 1;
-      newStats.bowling[bowler].balls += 1;
+      if (newStats.batting[striker]) newStats.batting[striker].balls += 1;
+      if (newStats.bowling[bowler]) newStats.bowling[bowler].balls += 1;
       isLegalDelivery = true;
       ballLabel = extraRuns > 0 ? `${extraRuns}${type}` : "0";
     }
@@ -122,26 +132,33 @@ export default function useMatchScoring(matchData) {
   };
 
   const processWicket = ({ type, fielder, runOutBatsman, runOutRuns, runOutEnd }) => {
+    if (!striker || !bowler || isInningsComplete) return; // Crash Prevention
+    
     saveSnapshot();
     const newStats = JSON.parse(JSON.stringify(stats));
+    
     let runsToAdd = type === "Run Out" ? runOutRuns : 0;
-    const outPlayer = type === "Run Out" ? runOutBatsman : striker;
+    const outPlayer = type === "Run Out" ? (runOutBatsman || striker) : striker;
     const overString = `${Math.floor(balls / 6)}.${balls % 6}`;
 
     setFallOfWickets(prev => [...prev, { score: runs + runsToAdd, wicket: wickets + 1, over: overString, player: outPlayer }]);
     
-    // Increment local state variables immediately for the logic checks
     const newWickets = wickets + 1;
-    setRuns(prev => prev + runsToAdd); setWickets(newWickets); setBalls(prev => prev + 1);
+    setRuns(prev => prev + runsToAdd); 
+    setWickets(newWickets); 
+    setBalls(prev => prev + 1);
     setCurrentOverHistory(prev => [...prev, type === "Run Out" && runsToAdd > 0 ? `${runsToAdd}+W` : "W"]);
 
-    if (runsToAdd > 0) {
-      newStats.batting[striker].runs += runsToAdd;
-      newStats.bowling[bowler].runs += runsToAdd;
+    // Update Stats Safely
+    if (newStats.batting[striker]) {
+      if (runsToAdd > 0) newStats.batting[striker].runs += runsToAdd;
+      newStats.batting[striker].balls += 1;
     }
-
-    newStats.batting[striker].balls += 1;
-    newStats.batting[outPlayer].out = true;
+    if (newStats.bowling[bowler]) {
+      if (runsToAdd > 0) newStats.bowling[bowler].runs += runsToAdd;
+      if (type !== "Run Out") newStats.bowling[bowler].wickets += 1;
+      newStats.bowling[bowler].balls += 1;
+    }
 
     let dismissalStr = "";
     if (type === "Bowled") dismissalStr = `b ${bowler}`;
@@ -149,32 +166,38 @@ export default function useMatchScoring(matchData) {
     else if (type === "Caught") dismissalStr = `c ${fielder} b ${bowler}`;
     else if (type === "Run Out") dismissalStr = `run out (${fielder})`;
     else if (type === "Stumped") dismissalStr = `st ${fielder} b ${bowler}`;
-    newStats.batting[outPlayer].dismissal = dismissalStr;
-
-    if (type !== "Run Out") newStats.bowling[bowler].wickets += 1;
-    newStats.bowling[bowler].balls += 1;
+    
+    if (newStats.batting[outPlayer]) {
+      newStats.batting[outPlayer].out = true;
+      newStats.batting[outPlayer].dismissal = dismissalStr;
+    }
     setStats(newStats);
 
-    // --- FIXED: Prevent Blank Page on All Out / Last Man ---
+    // --- FIX: Bulletproof Logic for assigning the next Batsman ---
     const isNowAllOut = newWickets >= totalWickets;
     const isNowLastMan = newWickets === teamSize - 1 && !isNowAllOut;
     const survivingBatsman = type === "Run Out" ? (outPlayer === striker ? nonStriker : striker) : nonStriker;
 
     if (isNowAllOut) {
-      // Innings is completely over. Clear both slots.
       setStriker(null);
       setNonStriker(null);
     } else if (isNowLastMan) {
-      // Last man standing mode (only if entire roster is out)
-      setStriker(survivingBatsman);
+      // Force the surviving batsman into the striker role so they render correctly
+      setStriker(survivingBatsman || striker);
       setNonStriker(null);
     } else {
-      // Normal wicket, we need to slot the new batsman
+      // Normal Wicket
       if (type === "Run Out") {
-        if (runOutEnd === "striker") { setStriker(null); setNonStriker(survivingBatsman); } 
-        else { setNonStriker(null); setStriker(survivingBatsman); }
+        if (runOutEnd === "striker") { 
+          setStriker(null); 
+          setNonStriker(survivingBatsman); 
+        } else { 
+          setNonStriker(null); 
+          setStriker(survivingBatsman); 
+        }
       } else {
-        setStriker(null);
+        setStriker(null); 
+        setNonStriker(survivingBatsman);
       }
     }
   };
