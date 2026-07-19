@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
 
-export default function PostMatchSummary({ finalData, onGoHome }) {
+export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
   const { isSuperOver, superOverStats, t1, t2, setupData, resultMessage } = finalData;
   const [activeTab, setActiveTab] = useState('awards');
   const [isDownloading, setIsDownloading] = useState(false);
@@ -213,7 +213,10 @@ export default function PostMatchSummary({ finalData, onGoHome }) {
           <button onClick={downloadPDF} disabled={isDownloading} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-2xl border border-emerald-500 active:scale-95 transition-all uppercase tracking-wider text-[11px] disabled:opacity-50">
             {isDownloading ? 'Generating...' : '📥 Download PDF'}
           </button>
-          <button onClick={() => window.location.reload()} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow-2xl border border-slate-700 active:scale-95 transition-transform uppercase tracking-wider text-[11px]">
+          <button 
+            onClick={onExit} 
+            className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow-2xl border border-slate-700 active:scale-95 transition-transform uppercase tracking-wider text-[11px]"
+          >
             Exit
           </button>
         </div>

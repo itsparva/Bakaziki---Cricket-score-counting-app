@@ -34,7 +34,7 @@ export default function UmpireConsole({ matchData, onEndMatch }) {
       resultMessage: resultMsg,
       setupData: matchData.setupData,
     };
-    return <PostMatchSummary finalData={finalData} />;
+    return <PostMatchSummary finalData={finalData} onExit={onEndMatch}/>;
   }
 
   if ((!scoring.striker || !scoring.nonStriker) && !scoring.isLastManStanding && !scoring.isInningsComplete) {
