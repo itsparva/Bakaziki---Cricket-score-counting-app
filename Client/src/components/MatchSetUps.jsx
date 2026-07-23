@@ -14,6 +14,8 @@ export default function MatchSetup({ onBack, onStartMatch }) {
     optedTo: 'bat'
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handlePlayerChange = (team, index, value) => {
     const newPlayers = [...matchDetails[team]];
     newPlayers[index] = value;
@@ -29,7 +31,7 @@ export default function MatchSetup({ onBack, onStartMatch }) {
     setMatchDetails({ ...matchDetails, [team]: newPlayers });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => { // <-- Add 'async' here
     e.preventDefault();
     
     // Validate uniqueness
@@ -56,7 +58,14 @@ export default function MatchSetup({ onBack, onStartMatch }) {
       playersA: matchDetails.playersA.filter(p => p.trim() !== ''),
       playersB: matchDetails.playersB.filter(p => p.trim() !== '')
     };
-    onStartMatch(cleanedDetails);
+
+    // --- NEW: Trigger loading state and await the response ---
+    setIsSubmitting(true);
+    try {
+      await onStartMatch(cleanedDetails);
+    } finally {
+      setIsSubmitting(false); // Re-enables the button if the API fails
+    }
   };
 
   return (
@@ -134,7 +143,17 @@ export default function MatchSetup({ onBack, onStartMatch }) {
       </form>
 
       <div className="p-4 bg-slate-900 border-t border-slate-800 absolute bottom-0 w-full">
-        <button onClick={handleSubmit} className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-lg py-4 rounded-xl shadow-lg uppercase">Let's Play!</button>
+        <button 
+          onClick={handleSubmit} 
+          disabled={isSubmitting}
+          className={`w-full font-black text-lg py-4 rounded-xl shadow-lg uppercase transition-all ${
+            isSubmitting 
+              ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
+              : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 active:scale-95'
+          }`}
+        >
+          {isSubmitting ? 'Sending request to ICC Server...' : "Let's Play!"}
+        </button>
       </div>
     </div>
   );

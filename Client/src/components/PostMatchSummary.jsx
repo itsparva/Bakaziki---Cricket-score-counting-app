@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
 
-export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
+export default function PostMatchSummary({ finalData, onExit }) {
   const { isSuperOver, superOverStats, t1, t2, setupData, resultMessage } = finalData;
   const [activeTab, setActiveTab] = useState('awards');
   const [isDownloading, setIsDownloading] = useState(false);
@@ -10,6 +10,13 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
 
   const venue = setupData?.venue || 'Local Ground';
   const matchDate = setupData?.matchDate || new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+  // --- NEW: Helper to identify the Captain ---
+  const checkCaptain = (playerName, teamName) => {
+    if (teamName === setupData?.teamA && playerName === setupData?.captainA) return true;
+    if (teamName === setupData?.teamB && playerName === setupData?.captainB) return true;
+    return false;
+  };
 
   // --- PLAYER STATS AGGREGATION ---
   const playersStats = {};
@@ -19,7 +26,6 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
     }
   };
 
-  // Only calculating main match stats for Awards so Super Over doesn't skew overall performance
   Object.keys(t1.stats.batting).forEach(p => { initPlayer(p, t1.team); playersStats[p] = { ...playersStats[p], ...t1.stats.batting[p] }; });
   Object.keys(t1.stats.bowling).forEach(p => { initPlayer(p, t2.team); playersStats[p].wRuns = t1.stats.bowling[p].runs; playersStats[p].wBalls = t1.stats.bowling[p].balls; playersStats[p].wickets = t1.stats.bowling[p].wickets; });
   Object.keys(t2.stats.batting).forEach(p => { initPlayer(p, t2.team); playersStats[p].runs = t2.stats.batting[p].runs; playersStats[p].balls = t2.stats.batting[p].balls; playersStats[p].fours = t2.stats.batting[p].fours; playersStats[p].sixes = t2.stats.batting[p].sixes; playersStats[p].out = t2.stats.batting[p].out; playersStats[p].dismissal = t2.stats.batting[p].dismissal; });
@@ -65,18 +71,24 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
       <h3 className={`text-xl font-black uppercase tracking-widest pl-2 border-l-4 ${isSuperOverTab ? 'text-purple-400 border-purple-500' : 'text-amber-500 border-amber-500'}`}>
         {teamData.team} {isSuperOverTab ? 'Super Over' : 'Innings'}
       </h3>
-      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-        <div className="bg-slate-800/50 p-2 text-xs font-bold text-slate-400 uppercase flex">
+      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-lg">
+        <div className="bg-slate-800/80 p-2 text-xs font-bold text-slate-400 uppercase flex">
           <span className="flex-1">Batter</span><span className="w-8 text-center">R</span><span className="w-8 text-center">B</span><span className="w-8 text-center">4s</span><span className="w-8 text-center">6s</span><span className="w-10 text-center">SR</span>
         </div>
         {Object.keys(teamData.stats.batting).map(p => {
           const s = teamData.stats.batting[p];
           if (s.balls === 0 && s.runs === 0 && !s.out) return null; 
           const sr = s.balls > 0 ? ((s.runs / s.balls) * 100).toFixed(0) : 0;
+          const isCap = checkCaptain(p, teamData.team);
           return (
             <div key={p} className="flex flex-col p-3 border-b border-slate-800/50 text-sm">
               <div className="flex items-center">
-                <span className={`flex-1 font-bold ${s.out ? 'text-slate-300' : 'text-emerald-400'}`}>{p} {s.out ? '' : '*'}</span>
+                <span className={`flex-1 font-bold ${s.out ? 'text-slate-400' : 'text-emerald-400'}`}>
+                  {p} 
+                  {/* --- NEW: Beautiful Captain Badge --- */}
+                  {isCap && <span className="ml-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 text-[9px] px-1.5 py-0.5 rounded-md align-middle">C</span>} 
+                  {s.out ? '' : '*'}
+                </span>
                 <span className="w-8 text-center font-bold text-white">{s.runs}</span>
                 <span className="w-8 text-center text-slate-400">{s.balls}</span>
                 <span className="w-8 text-center text-slate-400">{s.fours}</span>
@@ -88,8 +100,8 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
           );
         })}
       </div>
-      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden mt-2">
-        <div className="bg-slate-800/50 p-2 text-xs font-bold text-slate-400 uppercase flex">
+      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-lg mt-4">
+        <div className="bg-slate-800/80 p-2 text-xs font-bold text-slate-400 uppercase flex">
           <span className="flex-1">Bowler</span><span className="w-10 text-center">O</span><span className="w-10 text-center">R</span><span className="w-10 text-center">W</span><span className="w-12 text-center">Econ</span>
         </div>
         {Object.keys(teamData.stats.bowling).map(p => {
@@ -97,9 +109,13 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
           if (s.balls === 0) return null; 
           const overs = `${Math.floor(s.balls / 6)}.${s.balls % 6}`;
           const econ = ((s.runs / s.balls) * 6).toFixed(1);
+          const isCap = checkCaptain(p, teamData.team === t1.team ? t2.team : t1.team); // Bowler belongs to the OTHER team
           return (
             <div key={p} className="flex p-3 border-b border-slate-800/50 text-sm items-center">
-              <span className="flex-1 font-bold text-amber-400">{p}</span>
+              <span className="flex-1 font-bold text-amber-400">
+                {p}
+                {isCap && <span className="ml-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 text-[9px] px-1.5 py-0.5 rounded-md align-middle">C</span>}
+              </span>
               <span className="w-10 text-center text-slate-400">{overs}</span>
               <span className="w-10 text-center text-white">{s.runs}</span>
               <span className="w-10 text-center font-bold text-white">{s.wickets}</span>
@@ -113,7 +129,6 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
 
   return (
     <>
-      {/* --- MAIN MOBILE UI --- */}
       <div className="flex flex-col h-full bg-slate-950 text-white select-none overflow-hidden relative z-10">
         <div className="bg-gradient-to-b from-emerald-900/40 to-slate-950 pt-8 pb-4 px-4 border-b border-slate-800 shrink-0 text-center">
           <h1 className="text-3xl font-black text-amber-500 uppercase tracking-widest mb-2">Match Summary</h1>
@@ -167,7 +182,10 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
                 <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 p-5 rounded-2xl relative overflow-hidden">
                   <div className="absolute -right-4 -top-4 text-6xl opacity-10">🏆</div>
                   <p className="text-amber-500 text-xs font-black uppercase tracking-widest mb-1">Man of the Match</p>
-                  <h3 className="text-2xl font-black text-white mb-2">{motm.name} <span className="text-sm font-normal text-amber-500/80">({motm.team})</span></h3>
+                  <h3 className="text-2xl font-black text-white mb-2">
+                    {motm.name} 
+                    {checkCaptain(motm.name, motm.team) && <span className="ml-2 text-amber-200 text-sm align-middle">(C)</span>}
+                  </h3>
                   <p className="text-slate-300 text-sm font-mono bg-slate-900/50 inline-block px-3 py-1 rounded-lg border border-slate-800">
                     {motm.runs > 0 && `${motm.runs} Runs `} 
                     {motm.wickets > 0 && `• ${motm.wickets} Wkts `}
@@ -179,7 +197,10 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
                   <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
                     <div>
                       <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest mb-1">Best Batter</p>
-                      <h3 className="text-lg font-bold text-white truncate">{bestBatter.name}</h3>
+                      <h3 className="text-lg font-bold text-white truncate">
+                        {bestBatter.name}
+                        {checkCaptain(bestBatter.name, bestBatter.team) && <span className="ml-1 text-slate-400 text-[10px] align-middle">(C)</span>}
+                      </h3>
                     </div>
                     <div className="mt-3 flex items-baseline gap-1">
                       <span className="text-xl font-black text-amber-400">{bestBatter.runs}</span>
@@ -191,7 +212,10 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
                   <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
                     <div>
                       <p className="text-emerald-500 text-[10px] font-black uppercase tracking-widest mb-1">Best Bowler</p>
-                      <h3 className="text-lg font-bold text-white truncate">{bestBowler.name}</h3>
+                      <h3 className="text-lg font-bold text-white truncate">
+                        {bestBowler.name}
+                        {checkCaptain(bestBowler.name, bestBowler.team) && <span className="ml-1 text-slate-400 text-[10px] align-middle">(C)</span>}
+                      </h3>
                     </div>
                     <div className="mt-3 flex items-baseline gap-1">
                       <span className="text-xl font-black text-amber-400">{bestBowler.wickets}</span>
@@ -213,10 +237,7 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
           <button onClick={downloadPDF} disabled={isDownloading} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-2xl border border-emerald-500 active:scale-95 transition-all uppercase tracking-wider text-[11px] disabled:opacity-50">
             {isDownloading ? 'Generating...' : '📥 Download PDF'}
           </button>
-          <button 
-            onClick={onExit} 
-            className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow-2xl border border-slate-700 active:scale-95 transition-transform uppercase tracking-wider text-[11px]"
-          >
+          <button onClick={onExit} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow-2xl border border-slate-700 active:scale-95 transition-transform uppercase tracking-wider text-[11px]">
             Exit
           </button>
         </div>
@@ -269,27 +290,26 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
             {motm && (
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
                 <p className="text-amber-500 text-xs font-black uppercase tracking-widest mb-2">Man of the Match</p>
-                <h3 className="text-2xl font-bold text-white mb-3">{motm.name}</h3>
+                <h3 className="text-2xl font-bold text-white mb-3">{motm.name} {checkCaptain(motm.name, motm.team) && <span className="text-amber-500 text-lg ml-1">(c)</span>}</h3>
                 <p className="text-slate-400 text-sm font-mono bg-slate-950 inline-block px-3 py-1.5 rounded-lg">{motm.runs > 0 && `${motm.runs} Runs `} {motm.wickets > 0 && `• ${motm.wickets} Wkts`}</p>
               </div>
             )}
             {bestBatter && (
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
                 <p className="text-emerald-500 text-xs font-black uppercase tracking-widest mb-2">Best Batter</p>
-                <h3 className="text-2xl font-bold text-white mb-3">{bestBatter.name}</h3>
+                <h3 className="text-2xl font-bold text-white mb-3">{bestBatter.name} {checkCaptain(bestBatter.name, bestBatter.team) && <span className="text-slate-400 text-lg ml-1">(c)</span>}</h3>
                 <p className="text-amber-400 text-xl font-black">{bestBatter.runs} <span className="text-slate-500 text-sm font-mono">({bestBatter.balls})</span></p>
               </div>
             )}
             {bestBowler && (bestBowler.wickets > 0 || bestBowler.wBalls > 0) && (
               <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
                 <p className="text-emerald-500 text-xs font-black uppercase tracking-widest mb-2">Best Bowler</p>
-                <h3 className="text-2xl font-bold text-white mb-3">{bestBowler.name}</h3>
+                <h3 className="text-2xl font-bold text-white mb-3">{bestBowler.name} {checkCaptain(bestBowler.name, bestBowler.team) && <span className="text-slate-400 text-lg ml-1">(c)</span>}</h3>
                 <p className="text-amber-400 text-xl font-black">{bestBowler.wickets}<span className="text-slate-400 text-lg">/{bestBowler.wRuns}</span> <span className="text-slate-500 text-sm font-mono">({Math.floor(bestBowler.wBalls/6)}.{bestBowler.wBalls%6})</span></p>
               </div>
             )}
           </div>
 
-          {/* MAIN INNINGS PDF SCORECARDS */}
           {[t1, t2].map((teamData, idx) => (
             <div key={idx} className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
               <h3 className="text-2xl font-black text-amber-500 uppercase tracking-widest mb-6 pl-3 border-l-4 border-amber-500">{teamData.team} Innings</h3>
@@ -300,9 +320,10 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
                     const s = teamData.stats.batting[p];
                     if (s.balls === 0 && s.runs === 0 && !s.out) return null; 
                     const sr = s.balls > 0 ? ((s.runs / s.balls) * 100).toFixed(0) : 0;
+                    const isCap = checkCaptain(p, teamData.team);
                     return (
                       <tr key={p} className="border-b border-slate-800/50 last:border-0">
-                        <td className="py-4 px-4"><span className={`font-bold text-lg ${s.out ? 'text-slate-300' : 'text-emerald-400'}`}>{p} {s.out ? '' : '*'}</span>{s.out && <div className="text-xs text-slate-500 italic mt-1">{s.dismissal}</div>}</td>
+                        <td className="py-4 px-4"><span className={`font-bold text-lg ${s.out ? 'text-slate-300' : 'text-emerald-400'}`}>{p} {isCap ? '(c)' : ''} {s.out ? '' : '*'}</span>{s.out && <div className="text-xs text-slate-500 italic mt-1">{s.dismissal}</div>}</td>
                         <td className="py-4 px-4 text-center font-bold text-lg text-white">{s.runs}</td><td className="py-4 px-4 text-center text-slate-400">{s.balls}</td><td className="py-4 px-4 text-center text-slate-400">{s.fours}</td><td className="py-4 px-4 text-center text-slate-400">{s.sixes}</td><td className="py-4 px-4 text-center text-slate-500 font-mono">{sr}</td>
                       </tr>
                     );
@@ -317,9 +338,10 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
                     if (s.balls === 0) return null; 
                     const overs = `${Math.floor(s.balls / 6)}.${s.balls % 6}`;
                     const econ = ((s.runs / s.balls) * 6).toFixed(1);
+                    const isCap = checkCaptain(p, teamData.team === t1.team ? t2.team : t1.team);
                     return (
                       <tr key={p} className="border-b border-slate-800/50 last:border-0">
-                        <td className="py-4 px-4 font-bold text-lg text-amber-400">{p}</td><td className="py-4 px-4 text-center text-slate-400 font-mono">{overs}</td><td className="py-4 px-4 text-center text-slate-500">0</td><td className="py-4 px-4 text-center text-white text-lg">{s.runs}</td><td className="py-4 px-4 text-center font-bold text-white text-lg">{s.wickets}</td><td className="py-4 px-4 text-center text-slate-500 font-mono">{econ}</td>
+                        <td className="py-4 px-4 font-bold text-lg text-amber-400">{p} {isCap ? '(c)' : ''}</td><td className="py-4 px-4 text-center text-slate-400 font-mono">{overs}</td><td className="py-4 px-4 text-center text-slate-500">0</td><td className="py-4 px-4 text-center text-white text-lg">{s.runs}</td><td className="py-4 px-4 text-center font-bold text-white text-lg">{s.wickets}</td><td className="py-4 px-4 text-center text-slate-500 font-mono">{econ}</td>
                       </tr>
                     );
                   })}
@@ -328,7 +350,6 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
             </div>
           ))}
 
-          {/* SUPER OVER PDF SCORECARDS */}
           {isSuperOver && [superOverStats.t1, superOverStats.t2].map((teamData, idx) => (
             <div key={`so-${idx}`} className="bg-slate-900 rounded-2xl border border-slate-800 p-6 mt-4">
               <h3 className="text-2xl font-black text-purple-400 uppercase tracking-widest mb-6 pl-3 border-l-4 border-purple-500">Super Over: {teamData.team}</h3>
@@ -339,9 +360,10 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
                     const s = teamData.stats.batting[p];
                     if (s.balls === 0 && s.runs === 0 && !s.out) return null; 
                     const sr = s.balls > 0 ? ((s.runs / s.balls) * 100).toFixed(0) : 0;
+                    const isCap = checkCaptain(p, teamData.team);
                     return (
                       <tr key={p} className="border-b border-slate-800/50 last:border-0">
-                        <td className="py-4 px-4"><span className={`font-bold text-lg ${s.out ? 'text-slate-300' : 'text-purple-400'}`}>{p} {s.out ? '' : '*'}</span>{s.out && <div className="text-xs text-slate-500 italic mt-1">{s.dismissal}</div>}</td>
+                        <td className="py-4 px-4"><span className={`font-bold text-lg ${s.out ? 'text-slate-300' : 'text-purple-400'}`}>{p} {isCap ? '(c)' : ''} {s.out ? '' : '*'}</span>{s.out && <div className="text-xs text-slate-500 italic mt-1">{s.dismissal}</div>}</td>
                         <td className="py-4 px-4 text-center font-bold text-lg text-white">{s.runs}</td><td className="py-4 px-4 text-center text-slate-400">{s.balls}</td><td className="py-4 px-4 text-center text-slate-400">{s.fours}</td><td className="py-4 px-4 text-center text-slate-400">{s.sixes}</td><td className="py-4 px-4 text-center text-slate-500 font-mono">{sr}</td>
                       </tr>
                     );
@@ -356,9 +378,10 @@ export default function PostMatchSummary({ finalData, onGoHome, onExit }) {
                     if (s.balls === 0) return null; 
                     const overs = `${Math.floor(s.balls / 6)}.${s.balls % 6}`;
                     const econ = ((s.runs / s.balls) * 6).toFixed(1);
+                    const isCap = checkCaptain(p, teamData.team === superOverStats.t1.team ? superOverStats.t2.team : superOverStats.t1.team);
                     return (
                       <tr key={p} className="border-b border-slate-800/50 last:border-0">
-                        <td className="py-4 px-4 font-bold text-lg text-purple-400">{p}</td><td className="py-4 px-4 text-center text-slate-400 font-mono">{overs}</td><td className="py-4 px-4 text-center text-slate-500">0</td><td className="py-4 px-4 text-center text-white text-lg">{s.runs}</td><td className="py-4 px-4 text-center font-bold text-white text-lg">{s.wickets}</td><td className="py-4 px-4 text-center text-slate-500 font-mono">{econ}</td>
+                        <td className="py-4 px-4 font-bold text-lg text-purple-400">{p} {isCap ? '(c)' : ''}</td><td className="py-4 px-4 text-center text-slate-400 font-mono">{overs}</td><td className="py-4 px-4 text-center text-slate-500">0</td><td className="py-4 px-4 text-center text-white text-lg">{s.runs}</td><td className="py-4 px-4 text-center font-bold text-white text-lg">{s.wickets}</td><td className="py-4 px-4 text-center text-slate-500 font-mono">{econ}</td>
                       </tr>
                     );
                   })}

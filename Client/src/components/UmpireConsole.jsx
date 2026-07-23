@@ -40,12 +40,24 @@ export default function UmpireConsole({ matchData, onEndMatch }) {
   if ((!scoring.striker || !scoring.nonStriker) && !scoring.isLastManStanding && !scoring.isInningsComplete) {
     const missingRole = !scoring.striker ? "Striker" : "Non-Striker";
     const available = matchData[scoring.battingTeamKey].filter(p => p !== scoring.striker && p !== scoring.nonStriker && scoring.stats.batting[p] && !scoring.stats.batting[p].out);
+    
+    // --- NEW: Get Batting Team Name ---
+    const battingTeamName = matchData[scoring.battingTeam];
+
     return (
       <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-amber-500 uppercase">{scoring.matchStage === 'superOver' && <span className="text-red-500 block text-xs">SUPER OVER</span>} Select {missingRole}</h3>
-          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            {scoring.matchStage === 'superOver' && <span className="text-red-500 font-black tracking-widest uppercase block text-xs mb-1">SUPER OVER</span>}
+            <h3 className="text-2xl font-black text-amber-500 uppercase">Select {missingRole}</h3>
+            {/* --- NEW: Team Name Subtitle --- */}
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 border-l-2 border-amber-500 pl-2">
+              For {battingTeamName}
+            </p>
+          </div>
+          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform mt-1">✕ Exit</button>
         </div>
+        
         <div className="space-y-2 flex-1 overflow-y-auto">
           {available.map((p) => (
             <button key={p} onClick={() => (!scoring.striker ? scoring.setStriker(p) : scoring.setNonStriker(p))} className="w-full p-4 rounded-xl font-bold text-left bg-slate-900 border border-slate-700 hover:bg-slate-800 active:scale-95 text-emerald-400 transition-all">{p}</button>
@@ -60,16 +72,23 @@ export default function UmpireConsole({ matchData, onEndMatch }) {
     const prevOverBowler = scoring.pastOvers.length > 0 ? scoring.historyStack[scoring.historyStack.length - 1]?.bowler : null;
     const available = matchData[scoring.bowlingTeamKey];
     
+    // --- NEW: Get Bowling Team Name ---
+    const bowlingTeamName = matchData[scoring.battingTeam === "teamA" ? "teamB" : "teamA"];
+
     return (
       <div className="p-6 h-full bg-slate-950 text-white flex flex-col relative">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-emerald-500 uppercase">
-            {scoring.matchStage === 'superOver' && <span className="text-red-500 block text-xs">SUPER OVER</span>}
-            Select Bowler
-          </h3>
-          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform">✕ Exit</button>
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            {scoring.matchStage === 'superOver' && <span className="text-red-500 font-black tracking-widest uppercase block text-xs mb-1">SUPER OVER</span>}
+            <h3 className="text-2xl font-black text-emerald-500 uppercase">Select Bowler</h3>
+            {/* --- NEW: Team Name Subtitle --- */}
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 border-l-2 border-emerald-500 pl-2">
+              From {bowlingTeamName}
+            </p>
+          </div>
+          <button onClick={() => setExitModalOpen(true)} className="text-slate-500 hover:text-red-400 font-bold active:scale-95 transition-transform mt-1">✕ Exit</button>
         </div>
-        
+
         <div className="space-y-2 flex-1 overflow-y-auto">
           {available.map((p) => {
             const bStats = scoring.getBowlerStats(p);
@@ -87,7 +106,7 @@ export default function UmpireConsole({ matchData, onEndMatch }) {
                 <div className="flex justify-between items-center">
                   <span>{p}</span>
                   <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${bStats.remaining > 0 ? 'bg-slate-800 text-slate-400' : 'bg-red-900/50 text-red-400'}`}>
-                    {bStats.isFinished ? "Token limit reached" : `${bStats.remaining} overs left`}
+                    {bStats.isFinished ? "Dusro se bhi dalva liya karo " : `${bStats.remaining} overs left`}
                   </span>
                 </div>
               </button>
@@ -144,7 +163,7 @@ export default function UmpireConsole({ matchData, onEndMatch }) {
                 </span>
               </p>
             )}
-            {scoring.isLastManStanding && <p className="text-red-400 text-xs font-bold uppercase mt-1 pl-5">Last Man</p>}
+            {scoring.isLastManStanding && <p className="text-red-400 text-xs font-bold uppercase mt-1 pl-5">Last Standing</p>}
             {scoring.nonStriker && !scoring.isLastManStanding && (
               <p className="text-slate-400 truncate pl-5 mt-1">
                 {scoring.nonStriker} 
