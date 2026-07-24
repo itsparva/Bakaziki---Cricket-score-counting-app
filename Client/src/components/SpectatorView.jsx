@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import PostMatchSummary from './PostMatchSummary';
@@ -25,6 +25,9 @@ export default function SpectatorView({ matchId, onBack }) {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0); 
   const [recentEvent, setRecentEvent] = useState(null);
+  const [scoreFlash, setScoreFlash] = useState(false);
+  const lastBallCountRef = useRef(null);
+  const lastRunsRef = useRef(null);
 
   useEffect(() => {
     const fetchMatch = async () => {
@@ -53,21 +56,39 @@ export default function SpectatorView({ matchId, onBack }) {
     return () => socket.disconnect();
   }, [matchId]);
 
-  // --- Animation Trigger Logic (2.0 Seconds) ---
+  // --- Animation Trigger Logic: only fires on an actual new ball, not on every socket push ---
   useEffect(() => {
-    if (matchData?.liveState?.currentOverHistory) {
-      const history = matchData.liveState.currentOverHistory;
-      if (history.length > 0) {
+    const live = matchData?.liveState;
+    if (!live || typeof live.balls !== 'number') return;
+
+    const ballsBowled = live.balls;
+    const runs = live.runs;
+
+    const isNewBall = lastBallCountRef.current !== null && ballsBowled > lastBallCountRef.current;
+    const isNewRuns = lastRunsRef.current !== null && runs !== lastRunsRef.current;
+
+    if (isNewRuns) {
+      setScoreFlash(true);
+      setTimeout(() => setScoreFlash(false), 600);
+    }
+
+    if (isNewBall) {
+      const history = live.currentOverHistory;
+      if (history && history.length > 0) {
         const lastBall = history[history.length - 1];
-        
         if (lastBall === '4' || lastBall === '6' || lastBall === 'W') {
           setRecentEvent(lastBall);
           const timer = setTimeout(() => setRecentEvent(null), 2000);
+          lastBallCountRef.current = ballsBowled;
+          lastRunsRef.current = runs;
           return () => clearTimeout(timer);
         }
       }
     }
-  }, [matchData?.liveState?.currentOverHistory]);
+
+    lastBallCountRef.current = ballsBowled;
+    lastRunsRef.current = runs;
+  }, [matchData]);
 
   if (loading) return (
     <div className="h-full bg-[#060606] flex flex-col justify-center items-center text-[#D4AF37] font-bold gap-4 font-sans">
@@ -146,7 +167,11 @@ export default function SpectatorView({ matchId, onBack }) {
 
     const { stats: teamStats, liveInfo, name: battingTeamName } = teamObj;
     const bowlingTeamName = battingTeamName === team1Name ? team2Name : team1Name; // Dynamically grab the other team
-    const didNotBat = setupData[teamObj.squadKey].filter(p => teamStats.batting[p].balls === 0 && !teamStats.batting[p].out && liveInfo.striker !== p && liveInfo.nonStriker !== p);
+    const didNotBat = setupData[teamObj.squadKey].filter(p =>
+      (!teamStats.batting[p] || (teamStats.batting[p].balls === 0 && !teamStats.batting[p].out)) &&
+      liveInfo.striker !== p &&
+      liveInfo.nonStriker !== p
+    );
 
     return (
       <div className="animate-fade-in pb-20">
@@ -284,6 +309,16 @@ export default function SpectatorView({ matchId, onBack }) {
           }
           .hide-scrollbar::-webkit-scrollbar { display: none; }
           .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+          .score-flash { animation: scorePop 0.55s cubic-bezier(.25,.8,.3,1.4); }
+          @keyframes scorePop {
+            0%   { transform: scale(1);    text-shadow: 0 0 0 rgba(212,175,55,0); }
+            35%  { transform: scale(1.22); text-shadow: 0 0 24px rgba(212,175,55,0.9); }
+            100% { transform: scale(1);    text-shadow: 0 0 0 rgba(212,175,55,0); }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .score-flash { animation: none !important; }
+          }
         `}
       </style>
 
@@ -368,7 +403,7 @@ export default function SpectatorView({ matchId, onBack }) {
           <div>
             <h2 className="font-display text-xl font-black text-[#EDE6D6] leading-none drop-shadow-md">{teams[0].name}</h2>
             {teams[0].hasBatted && (
-              <p className={`font-mono-score font-black text-2xl mt-1 drop-shadow-md ${teams[0].isLive ? 'text-[#D4AF37] drop-shadow-[0_0_14px_rgba(212,175,55,0.4)]' : 'text-[#EDE6D6]/60'}`}>
+              <p className={`score-number font-mono-score font-black text-2xl mt-1 drop-shadow-md transition-transform ${teams[0].isLive ? 'text-[#D4AF37] drop-shadow-[0_0_14px_rgba(212,175,55,0.4)]' : 'text-[#EDE6D6]/60'} ${teams[0].isLive && scoreFlash ? 'score-flash' : ''}`}>
                 {teams[0].liveInfo?.runs}<span className="text-lg text-[#EDE6D6]/30">/{teams[0].liveInfo?.wickets}</span>
                 <span className="text-sm text-[#EDE6D6]/30 ml-2">({Math.floor((teams[0].liveInfo?.balls||0)/6)}.{(teams[0].liveInfo?.balls||0)%6})</span>
               </p>
@@ -377,7 +412,7 @@ export default function SpectatorView({ matchId, onBack }) {
           <div className="text-right">
             <h2 className="font-display text-xl font-black text-[#EDE6D6] leading-none drop-shadow-md">{teams[1].name}</h2>
             {teams[1].hasBatted && (
-              <p className={`font-mono-score font-black text-2xl mt-1 drop-shadow-md ${teams[1].isLive ? 'text-[#D4AF37] drop-shadow-[0_0_14px_rgba(212,175,55,0.4)]' : 'text-[#EDE6D6]/60'}`}>
+              <p className={`score-number font-mono-score font-black text-2xl mt-1 drop-shadow-md transition-transform ${teams[1].isLive ? 'text-[#D4AF37] drop-shadow-[0_0_14px_rgba(212,175,55,0.4)]' : 'text-[#EDE6D6]/60'} ${teams[1].isLive && scoreFlash ? 'score-flash' : ''}`}>
                 {teams[1].liveInfo?.runs}<span className="text-lg text-[#EDE6D6]/30">/{teams[1].liveInfo?.wickets}</span>
                 <span className="text-sm text-[#EDE6D6]/30 ml-2">({Math.floor((teams[1].liveInfo?.balls||0)/6)}.{(teams[1].liveInfo?.balls||0)%6})</span>
               </p>
