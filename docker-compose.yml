@@ -15,7 +15,7 @@ services:
       context: ./Client
     container_name: bakaziki-frontend
     ports:
-      - "5173:5173"
+      - "80:80"
     env_file:
       - ./Client/.env
     depends_on:
