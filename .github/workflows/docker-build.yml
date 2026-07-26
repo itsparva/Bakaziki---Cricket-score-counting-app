@@ -26,11 +26,11 @@ jobs:
         with:
           context: ./Server
           push: true
-          tags: riya2612/bakaziki-backend:latest
+          tags: riya2612/bakaziki-backend:${{ github.sha }}
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
           context: ./Client
           push: true
-          tags: riya2612/bakaziki-frontend:latest
+          tags: riya2612/bakaziki-frontend:${{ github.sha }}
