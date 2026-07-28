@@ -5,19 +5,20 @@ services:
     container_name: bakaziki-backend
     ports:
       - "5000:5000"
-    env_file:
-      - ./Server/.env
+    # FIX 1: Mount the physical file so dotenv/dotenvx can read it on the disk
+    volumes:
+      - ./Server/.env:/app/.env
     restart: unless-stopped
-   
 
   frontend:
     build:
       context: ./Client
     container_name: bakaziki-frontend
     ports:
-      - "80:80"
-    env_file:
-      - ./Client/.env
+      - "5173:80"
+    # Fix for frontend if it also uses runtime file-reading
+    volumes:
+      - ./Client/.env:/app/.env
     depends_on:
       - backend
     restart: unless-stopped
