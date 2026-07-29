@@ -1,15 +1,19 @@
 # Dependencies
-client/node_modules/
-server/node_modules/
+Client/node_modules/
+Server/node_modules/
 
 # Build
-client/dist/
+Client/dist/
 
 # Environment variables
-server/.env
+Client/.env
+Server/.env
 
 # Logs
 *.log
 
-# Editor
+# IDE
 .vscode/
+
+# OS files
+.DS_Store
