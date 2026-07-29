@@ -44,3 +44,8 @@ jobs:
       - name: Install backend dependencies
         working-directory: ./Server
         run: npm ci
+
+      # Step 7: Run backend lint
+      - name: Backend lint
+        working-directory: ./Server
+        run: npm run lint
