@@ -14,9 +14,13 @@ spec:
       labels:
         app: backend 
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
         - name: backend
-          image: riya2612/bakaziki-backend:latest
+          image: riya2612/bakaziki-backend:${GITHUB_SHA}
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
@@ -25,6 +29,14 @@ spec:
                 name: backend-config
             - secretRef:
                 name: backend-secret
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
           resources:
             requests:
               memory: "256Mi"
@@ -32,4 +44,11 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+              
+      volumes:
+        - name: tmp
+          emptyDir: {}

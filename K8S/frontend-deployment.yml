@@ -13,12 +13,25 @@ spec:
       labels:
         app: frontend
     spec:
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        fsGroup: 101
+
       containers:
         - name: frontend
-          image: riya2612/bakaziki-frontend:latest
+          image: riya2612/bakaziki-frontend:${GITHUB_SHA}
           imagePullPolicy: Always
           ports:
             - containerPort: 80
+        
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           resources:
             requests:
               memory: "256Mi"
@@ -26,3 +39,15 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+
+          volumeMounts:
+            - name: cache
+              mountPath: /var/cache/nginx
+            - name: run
+              mountPath: /var/run
+
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
