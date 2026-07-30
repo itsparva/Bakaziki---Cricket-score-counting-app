@@ -209,7 +209,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: config
-          scan-ref: ./k8s
+          scan-ref: ./K8S
           format: table
           exit-code: '1'
           severity: HIGH,CRITICAL
