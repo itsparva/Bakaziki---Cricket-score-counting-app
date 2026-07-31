@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+  security-events: write
+
 jobs:
   code_quality:
     name: Code Quality & Build Validation
@@ -148,20 +152,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
-        run: |
-          docker build \
-            -t $BACKEND_IMAGE:${{ github.sha }} \
-            -t $BACKEND_IMAGE:latest \
-            -f Server/Dockerfile \
-            Server
+        run:
+          docker build -t $BACKEND_IMAGE:${{ github.sha }} ./Server
 
       - name: Build frontend image
-        run: |
-          docker build \
-            -t $FRONTEND_IMAGE:${{ github.sha }} \
-            -t $FRONTEND_IMAGE:latest \
-            -f Client/Dockerfile \
-            Client
+        run:
+          docker build -t $FRONTEND_IMAGE:${{ github.sha }} ./Client
 
       - name: Scan backend image with Trivy
         uses: aquasecurity/trivy-action@0.35.0
@@ -194,6 +190,28 @@ jobs:
       - name: Push frontend image to Docker Hub
         run: |
           docker push $FRONTEND_IMAGE:${{ github.sha }}
+
+      - name: Update backend image tag
+        run: |
+          sed -i "s|image: riya2612/bakaziki-backend:.*|image: riya2612/bakaziki-backend:${{ github.sha }}|" K8S/backend-deployment.yml
+
+      - name: Update frontend image tag
+        run: |
+          sed -i "s|image: riya2612/bakaziki-frontend:.*|image: riya2612/bakaziki-frontend:${{ github.sha }}|" K8S/frontend-deployment.yml
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit updated Kubernetes manifests
+        run: |
+          git add K8S/backend-deployment.yml K8S/frontend-deployment.yml
+          git commit -m "Update image tags to ${{ github.sha }}" || echo "No changes to commit"
+
+      - name: Push updated manifests
+        run: |
+          git push origin main
         
   kubernetes_scan:
     name: Kubernetes Manifest Scan (Trivy Config)
@@ -235,3 +253,5 @@ jobs:
           framework: kubernetes
           quiet: true
           skip_check: CKV_K8S_43,CKV_K8S_14,CKV_K8S_35
+
+    
