@@ -240,7 +240,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets. }}
+        token: ${{ secrets.TOKEN_GITHUB }}
 
     - name: Update backend image tag
       run: |
