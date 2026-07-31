@@ -24,7 +24,7 @@ spec:
       
       containers:
         - name: backend
-          image: riya2612/bakaziki-backend:{{$GITHUB_SHA}}
+          image: riya2612/bakaziki-backend:${{ github.sha }}
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
