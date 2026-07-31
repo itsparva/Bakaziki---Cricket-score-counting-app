@@ -13,8 +13,8 @@ permissions:
   security-events: write
 
 env:
-BACKEND_IMAGE: riya2612/bakaziki-backend
-FRONTEND_IMAGE: riya2612/bakaziki-frontend
+  BACKEND_IMAGE: riya2612/bakaziki-backend
+  FRONTEND_IMAGE: riya2612/bakaziki-frontend
 
 jobs:
   code_quality:
