@@ -62,7 +62,9 @@ jobs:
           fetch-depth: 0
 
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2      
+        uses: gitleaks/gitleaks-action@v2 
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN_GITHUB }}     
 
   codeql_scan:
     name: Static Application Security Testing (CodeQL)
