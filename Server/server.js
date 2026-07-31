@@ -100,6 +100,10 @@ io.on('connection', (socket) => {
   });
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 // ==========================================
 // 5. START SERVER (Crucial: server.listen)
 // ==========================================

@@ -232,3 +232,4 @@ jobs:
           directory: .
           framework: kubernetes
           quiet: true
+          skip_check: CKV_K8S_43

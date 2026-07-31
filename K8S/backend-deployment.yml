@@ -14,13 +14,17 @@ spec:
       labels:
         app: backend 
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      
       containers:
         - name: backend
-          image: riya2612/bakaziki-backend:${GITHUB_SHA}
+          image: riya2612/bakaziki-backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
@@ -44,6 +48,20 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 5
 
           volumeMounts:
             - name: tmp
