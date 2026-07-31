@@ -228,38 +228,4 @@ jobs:
           quiet: true
           skip_check: CKV_K8S_43,CKV_K8S_14,CKV_K8S_35
 
-  gitops_deploy:
-    name: GitOps Deployment (Update Kubernetes Manifests)
-    runs-on: ubuntu-latest
-    needs: checkov_scan
-
-    permissions:
-      contents: write
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.TOKEN_GITHUB }}
-
-    - name: Update backend image tag
-      run: |
-        sed -i "s|image: riya2612/bakaziki-backend:.*|image: riya2612/bakaziki-backend:${{ github.sha }}|" K8S/backend-deployment.yml
-
-    - name: Update frontend image tag
-      run: |
-        sed -i "s|image: riya2612/bakaziki-frontend:.*|image: riya2612/bakaziki-frontend:${{ github.sha }}|" K8S/frontend-deployment.yml
-
-    - name: Configure Git
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-    - name: Commit updated manifests
-      run: |
-        git add K8S/backend-deployment.yml K8S/frontend-deployment.yml
-        git commit -m "Update image tags to ${{ github.sha }}" || echo "No changes to commit"
-
-    - name: Push updated manifests
-      run: |
-        git push origin main 
+ 
