@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: riya2612/bakaziki-frontend:56363de28c5941ec10e738967231ccd045809c56
+          image: riya2612/bakaziki-frontend:6c72a3fb6714ae949b5645f7d188cc544d1486c7
           imagePullPolicy: Always
           ports:
             - containerPort: 80
