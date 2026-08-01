@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: riya2612/bakaziki-frontend:${{ github.sha }}
+          image: riya2612/bakaziki-frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
