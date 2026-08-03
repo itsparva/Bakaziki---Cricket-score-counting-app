@@ -4,5 +4,5 @@ metadata:
   name: backend-config
   namespace: bakaziki
 data:
-  CLIENT_URL: "http://frontend-service"
+  CLIENT_URL: "http://localhost:3000"
   PORT: "5000"
