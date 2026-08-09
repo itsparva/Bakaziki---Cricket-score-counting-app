@@ -1,13 +1,32 @@
 services:
+  mongodb:
+    image: mongo:7.0
+    container_name: bakaziki-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: Bakaziki
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./Server
     container_name: bakaziki-backend
     ports:
       - "5000:5000"
-    # FIX 1: Mount the physical file so dotenv/dotenvx can read it on the disk
-    volumes:
-      - ./Server/.env:/app/.env
+    env_file:
+      - ./Server/.env
+    depends_on:
+      mongodb:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -15,11 +34,10 @@ services:
       context: ./Client
     container_name: bakaziki-frontend
     ports:
-      - "5173:80"
-    # Fix for frontend if it also uses runtime file-reading
-    volumes:
-      - ./Client/.env:/app/.env
+      - "8000:80"
     depends_on:
       - backend
     restart: unless-stopped
 
+volumes:
+  mongo-data:

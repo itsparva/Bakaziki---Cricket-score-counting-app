@@ -41,7 +41,7 @@ const io = new Server(server, {
 // 2. DATABASE CONNECTION
 // ==========================================
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('🔥 MongoDB Connected successfully'))
+  .then((conn) => console.log(`🔥 MongoDB Connected successfully ${conn.connection.host}:${conn.connection.port}`))
   .catch((err) => console.log('❌ MongoDB Connection Error:', err));
 
 // ==========================================
@@ -111,3 +111,4 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+

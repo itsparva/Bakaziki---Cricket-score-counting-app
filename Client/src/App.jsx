@@ -5,7 +5,7 @@ import MatchSetup from './components/MatchSetUps';
 import UmpireConsole from './components/UmpireConsole';
 import SpectatorView from './components/SpectatorView';
 
-const SERVER_URL = 'https://bakaziki-cricket-score-counting-app.onrender.com';
+const SERVER_URL = 'http://localhost:5000';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('home');

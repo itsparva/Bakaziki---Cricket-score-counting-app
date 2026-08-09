@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+  namespace: bakaziki
+spec:
+  clusterIP: None # Headless service for StatefulSet stable network identity
+  selector:
+    app: mongodb
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
