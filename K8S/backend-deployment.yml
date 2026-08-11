@@ -24,7 +24,7 @@ spec:
       
       containers:
         - name: backend
-          image: riya2612/bakaziki-backend:initial
+          image: riya2612/bakaziki-backend:3721bf96f0594a37447e6b87050b2838e4201bb9
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
