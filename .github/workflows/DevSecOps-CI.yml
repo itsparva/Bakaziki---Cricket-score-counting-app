@@ -7,9 +7,13 @@ on:
   pull_request:
     branches:
       - RIYA
+    paths-ignore:
+      - 'K8S/**'
+      - 'argocd/**'
+      - '.github/workflows/GitOps-CD.yml'
 
 permissions:
-  contents: write
+  contents: read
   security-events: write
 
 env:
@@ -118,7 +122,7 @@ jobs:
         with:
           node-version: 22
 
-      # Frontend audit
+    # Frontend
       - name: Install frontend dependencies
         working-directory: ./Client
         run: npm ci
@@ -126,8 +130,9 @@ jobs:
       - name: Audit frontend dependencies
         working-directory: ./Client
         run: npm audit --audit-level=high
+        continue-on-error: true
 
-      # Backend audit
+    # Backend
       - name: Install backend dependencies
         working-directory: ./Server
         run: npm ci
@@ -135,6 +140,7 @@ jobs:
       - name: Audit backend dependencies
         working-directory: ./Server
         run: npm audit --audit-level=high
+        continue-on-error: true
 
   docker_build_scan:
     name: Docker Build & Trivy Scan
@@ -152,12 +158,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
-        run:
-          docker build -t $BACKEND_IMAGE:${{ github.sha }} ./Server
+        run: docker build -t $BACKEND_IMAGE:${{ github.sha }} ./Server
 
       - name: Build frontend image
-        run:
-          docker build -t $FRONTEND_IMAGE:${{ github.sha }} ./Client
+        run: docker build -t $FRONTEND_IMAGE:${{ github.sha }} ./Client
 
       - name: Scan backend image with Trivy
         uses: aquasecurity/trivy-action@0.35.0

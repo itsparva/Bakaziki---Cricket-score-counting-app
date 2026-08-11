@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bakaziki
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: |
+      backend=riya2612/bakaziki-backend,
+      frontend=riya2612/bakaziki-frontend
+    argocd-image-updater.argoproj.io/backend.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/frontend.update-strategy: newest-build
+    argocd-image-updater.argoproj.io/write-back-method: git
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/itsparva/Bakaziki---Cricket-score-counting-app.git
+    targetRevision: RIYA
+    path: K8S
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bakaziki
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

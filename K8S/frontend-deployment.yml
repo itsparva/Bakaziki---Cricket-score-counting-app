@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: riya2612/bakaziki-frontend:latest1
+          image: riya2612/bakaziki-frontend:initial
           imagePullPolicy: Always
           ports:
             - containerPort: 80

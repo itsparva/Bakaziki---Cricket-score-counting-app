@@ -1,0 +1,36 @@
+name: ArgoCD Continuous Delivery
+
+on:
+    push:
+      branches:
+        - RIYA
+      paths:
+        - 'K8S/**'
+        - 'argocd/**'
+        - '.github/workflows/GitOps-CD.yml'
+
+permissions:
+    contents: read
+
+jobs:
+    manifest-validation:
+        name: Kubernetes Manifest Validation
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Validate Kubernetes manifests
+              uses: instrumenta/kubeval-action@master
+              with: 
+                files: K8S
+
+            - name: Display changed manifests
+              run: |
+                echo "Kubernetes manifests updated:"
+                git diff --name-only HEAD~1 HEAD || true
+
+            - name: CD workflow completed
+              run: |
+                echo "Argo CD will detect these manifest changes and deploy automatically."
