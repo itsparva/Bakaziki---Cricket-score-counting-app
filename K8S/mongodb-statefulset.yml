@@ -25,6 +25,7 @@ spec:
             runAsUser: 0
             runAsNonRoot: false
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
           volumeMounts:
             - name: mongodb-storage
               mountPath: /data/db
@@ -46,7 +47,7 @@ spec:
           
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
