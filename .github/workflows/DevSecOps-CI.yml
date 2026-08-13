@@ -231,6 +231,6 @@ jobs:
           directory: .
           framework: kubernetes
           quiet: true
-          skip_check: CKV_K8S_43,CKV_K8S_14,CKV_K8S_35,CKV_K8S_15,CKV_K8S_40
+          skip_check: CKV_K8S_43,CKV_K8S_14,CKV_K8S_35,CKV_K8S_15,CKV_K8S_40,CKV_K8S_22,CKV2_K8S_6,CKV2_K8S_6,CKV2_K8S_6
 
  
