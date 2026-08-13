@@ -1,0 +1,3 @@
+# MongoDB official image requires writable /tmp for Unix socket creation.
+# readOnlyRootFilesystem=true causes CrashLoopBackOff (Exit Code 14).
+KSV-0014

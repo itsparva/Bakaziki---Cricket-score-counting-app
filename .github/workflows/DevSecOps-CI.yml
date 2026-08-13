@@ -214,6 +214,7 @@ jobs:
           format: table
           exit-code: '1'
           severity: HIGH,CRITICAL
+          trivyignores: .trivyignore
 
   checkov_scan:
     name: Infrastructure as Code Scan (Checkov)
